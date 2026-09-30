@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "LQR: build DLL", "type": "process", "command": "mingw32-make", "args": ["all"],
+      "options": {"cwd": "${workspaceFolder}/WheelLeg_LQR"},
+      "group": {"kind": "build", "isDefault": true}, "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "LQR: run main.py", "type": "process", "command": "python", "args": ["main.py"],
+      "options": {"cwd": "${workspaceFolder}"}, "dependsOn": "LQR: build DLL", "problemMatcher": []
+    },
+    {
+      "label": "LQR: verify", "type": "process", "command": "mingw32-make", "args": ["verify"],
+      "options": {"cwd": "${workspaceFolder}/WheelLeg_LQR"}, "problemMatcher": []
+    }
+  ]
+}

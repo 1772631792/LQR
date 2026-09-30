@@ -1,0 +1,99 @@
+{
+  "baseline": {
+    "final_state": [
+      2.1440164964927557e-05,
+      -4.105247239028595e-05,
+      4.305176642562888e-06,
+      -1.2139105762111481e-06
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17253323940392012,
+    "peak_force_N": 30.69321632385254,
+    "saturation_fraction": 0.0
+  },
+  "c_python_max_state_error": 3.0173429976798616e-08,
+  "nonlinear": {
+    "final_state": [
+      2.1968665186160165e-05,
+      -4.2023432312275815e-05,
+      4.4030024577709134e-06,
+      -1.2351959682963866e-06
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17640944351112284,
+    "peak_force_N": 30.69321632385254,
+    "saturation_fraction": 0.0
+  },
+  "disturbance": {
+    "final_state": [
+      5.1988224610781584e-05,
+      -0.00014206991957417807,
+      1.9048100913410113e-05,
+      -1.1905302303973833e-05
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17253323940392012,
+    "peak_force_N": 30.69321632385254,
+    "saturation_fraction": 0.0
+  },
+  "nonlinear_disturbance": {
+    "final_state": [
+      5.252348309955575e-05,
+      -0.00014307546444194686,
+      1.9151665274266106e-05,
+      -1.1931529397120183e-05
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17640944351112284,
+    "peak_force_N": 30.69321632385254,
+    "saturation_fraction": 0.0
+  },
+  "negative_tilt": {
+    "final_state": [
+      -2.1440164964927557e-05,
+      4.105247239028595e-05,
+      -4.305176642562888e-06,
+      1.2139105762111481e-06
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17253323940392012,
+    "peak_force_N": 30.69321632385254,
+    "saturation_fraction": 0.0
+  },
+  "saturation": {
+    "final_state": [
+      3.2424471462201974e-05,
+      -6.201806734877086e-05,
+      6.49734608805935e-06,
+      -1.8217986790715523e-06
+    ],
+    "peak_pitch_deg": 14.999999999999998,
+    "peak_position_m": 0.26029422544470304,
+    "peak_force_N": 40.0,
+    "saturation_fraction": 0.0011
+  },
+  "position_reference": {
+    "final_state": [
+      0.20001791317626774,
+      -2.064642858182925e-05,
+      8.335657011531754e-07,
+      1.8625735254805813e-06
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.24906998068922073,
+    "peak_force_N": 27.898303985595703,
+    "saturation_fraction": 0.0
+  },
+  "sensor_noise": {
+    "final_state": [
+      4.666521543835032e-05,
+      5.1551689186170035e-05,
+      1.778698750179584e-05,
+      -7.5387393240598465e-06
+    ],
+    "peak_pitch_deg": 10.0,
+    "peak_position_m": 0.17257949243285814,
+    "peak_force_N": 30.709318161010742,
+    "saturation_fraction": 0.0
+  }
+}

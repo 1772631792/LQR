@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C LQR + Python physics", "type": "debugpy", "request": "launch",
+      "program": "${workspaceFolder}/main.py", "cwd": "${workspaceFolder}",
+      "args": [], "console": "integratedTerminal",
+      "preLaunchTask": "LQR: build DLL"
+    }
+  ]
+}

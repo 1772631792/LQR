@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "LQR: design gains", "type": "process", "command": "python", "args": ["-m", "simulation.design_lqr"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "LQR: build DLL", "type": "process", "command": "mingw32-make", "args": ["all"], "options": {"cwd": "${workspaceFolder}"}, "group": {"kind": "build", "isDefault": true}, "problemMatcher": ["$gcc"]},
+    {"label": "LQR: verify", "type": "process", "command": "mingw32-make", "args": ["verify"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "LQR: animate", "type": "process", "command": "python", "args": ["main.py"], "dependsOn": "LQR: build DLL", "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []},
+    {"label": "LQR: five-bar leg demo", "type": "process", "command": "python", "args": ["main.py", "--leg-demo"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []}
+  ]
+}

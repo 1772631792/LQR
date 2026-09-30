@@ -1,0 +1,64 @@
+{
+  "experiments": [
+    {
+      "name": "stand",
+      "peak_pitch_deg": 0.0011660896311849888,
+      "airborne_ticks": 2,
+      "max_closure_error_m": 1.9446196104871315e-05,
+      "final_position": [
+        -2.000274321370456,
+        3.744529433203454e-12,
+        0.26210230613774943
+      ],
+      "physics_rtf": 12.414181804352317,
+      "contacts": [
+        "Ltire",
+        "Rtire",
+        "ground"
+      ]
+    },
+    {
+      "name": "ramp",
+      "peak_pitch_deg": 1.3045126664093272,
+      "airborne_ticks": 253,
+      "max_closure_error_m": 0.0002208361593052715,
+      "final_position": [
+        5.567885782405283,
+        -0.00031043176603591337,
+        0.33703241821415864
+      ],
+      "physics_rtf": 12.603875627883532,
+      "contacts": [
+        "Ltire",
+        "Rtire",
+        "ground",
+        "launch_ramp",
+        "ramp_platform"
+      ]
+    },
+    {
+      "name": "step",
+      "peak_pitch_deg": 3.2678253758224627,
+      "airborne_ticks": 97,
+      "max_closure_error_m": 5.07351506323158e-05,
+      "final_position": [
+        4.197871897796304,
+        2.299890322473229,
+        0.3371497016231621
+      ],
+      "physics_rtf": 13.035156723197044,
+      "contacts": [
+        "Ltire",
+        "Rtire",
+        "ground",
+        "single_step"
+      ]
+    }
+  ],
+  "render": {
+    "sim_seconds": 3.959999999999675,
+    "wall_seconds": 1.5643166999943787,
+    "rendered_rtf": 2.5314567056746915,
+    "fps": 76.71080926287574
+  }
+}
