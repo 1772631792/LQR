@@ -8,7 +8,7 @@ typedef struct
 } PID;
 static struct
 {
-    float gains[3][4], ts, wheel_limit, joint_limit;
+    float gains[3][4], ts, wheel_limit, joint_limit, support_mass;
     PID length[2], roll, yaw;
     int ready;
 } mcu;
@@ -72,14 +72,14 @@ int Chassis_Init(const double *gains, const double *tuning, double ts)
             return -1;
         }
     }
-    for (i = 0; i < 11; ++i)
+    for (i = 0; i < 12; ++i)
     {
         if (!isfinite(tuning[i]) || tuning[i] < 0)
         {
             return -1;
         }
     }
-    if (tuning[9] <= 0 || tuning[10] <= 0)
+    if (tuning[9] <= 0 || tuning[10] <= 0 || tuning[11] <= 0)
     {
         return -1;
     }
@@ -103,6 +103,7 @@ int Chassis_Init(const double *gains, const double *tuning, double ts)
     mcu.ts = (float)ts;
     mcu.wheel_limit = (float)tuning[9];
     mcu.joint_limit = (float)tuning[10];
+    mcu.support_mass = (float)tuning[11];
     mcu.ready = 1;
     return 0;
 }
@@ -141,8 +142,8 @@ int Chassis_Update(const double *s, const double *ref, double *out)
     roll_torque = pid(&mcu.roll, (float)(ref[2] - s[6]), (float)s[7], 4.0f);
     yaw_torque = pid(&mcu.yaw, atan2f(sinf((float)(ref[3] - s[8])), cosf((float)(ref[3] - s[8]))), (float)s[9], 3.0f);
     /* hL=h+track/2*roll, hR=h-track/2*roll (small-roll reduced model). */
-    fl = 24.525f * cosf((float)s[2]) + pid(&mcu.length[0], (float)(ref[1] + 0.18 * ref[2] - s[4] - 0.18 * s[6]), (float)(s[5] + 0.18 * s[7]), 65.0f) + roll_torque / 0.36f;
-    fr = 24.525f * cosf((float)s[2]) + pid(&mcu.length[1], (float)(ref[1] - 0.18 * ref[2] - s[4] + 0.18 * s[6]), (float)(s[5] - 0.18 * s[7]), 65.0f) - roll_torque / 0.36f;
+    fl = 0.5f * mcu.support_mass * 9.81f * cosf((float)s[2]) + pid(&mcu.length[0], (float)(ref[1] + 0.18 * ref[2] - s[4] - 0.18 * s[6]), (float)(s[5] + 0.18 * s[7]), 65.0f) + roll_torque / 0.36f;
+    fr = 0.5f * mcu.support_mass * 9.81f * cosf((float)s[2]) + pid(&mcu.length[1], (float)(ref[1] - 0.18 * ref[2] - s[4] + 0.18 * s[6]), (float)(s[5] - 0.18 * s[7]), 65.0f) - roll_torque / 0.36f;
     requested_fl = fl;
     requested_fr = fr;
     fl = clip(fl, 0, 100);

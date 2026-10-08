@@ -22,6 +22,14 @@ def main():
         while app.result is None and time.perf_counter()<deadline:
             root.update();time.sleep(.01)
         assert app.result is not None,'Background calculation did not finish'
+        assert app.tabs.tab(app.tabs.select(),'text')=='仿真设置','Quick preview should not jump after calculation'
+        assert app.nav_buttons['仿真设置'].cget('text')=='简化计算预览'
+        assert [app.k_design_book.tab(i,'text') for i in range(app.k_design_book.index('end'))]==['K矩阵生成参数','矩阵结果']
+        assert app.fields['payload_mass'].get()=='0.0' and app.fields['q'].get()
+        assert not app.preview_advanced.winfo_manager()
+        app.select_page('二维机构');app.view_play_buttons['二维机构'].invoke();assert app.playing
+        assert '暂停' in app.view_play_buttons['三维底盘'].cget('text')
+        app.view_play_buttons['二维机构'].invoke();assert not app.playing
         for tab in app.pages.values():
             app.tabs.select(tab);root.update();app.render();root.update()
         assert '生产代码导出' in app.pages
@@ -109,6 +117,10 @@ def main():
             ImageGrab.grab(window=hwnd).save(ROOT/'outputs'/'host_verified'/'matrix_ui.png')
             app.tabs.select(app.pages['仿真设置']);root.update()
             ImageGrab.grab(window=hwnd).save(ROOT/'outputs'/'host_verified'/'settings_ui.png')
+            app.toggle_preview_advanced();root.update()
+            assert app.preview_advanced.winfo_manager()
+            ImageGrab.grab(window=hwnd).save(ROOT/'outputs'/'host_verified'/'model_preview_advanced_ui.png')
+            app.toggle_preview_advanced();root.update()
             app.tabs.select(app.pages['MuJoCo 实景']);root.update()
             assert not app.arena_panel.advanced.winfo_manager()
             ImageGrab.grab(window=hwnd).save(ROOT/'outputs'/'host_verified'/'mujoco_ui.png')

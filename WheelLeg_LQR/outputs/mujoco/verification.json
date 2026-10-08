@@ -1,64 +1,74 @@
 {
+  "map_rulebook": "RMUC 2026 V2.2.0 index; terrain drawings checked in V2.1.0",
+  "arena_size_m": [
+    28.0,
+    15.0
+  ],
   "experiments": [
     {
       "name": "stand",
-      "peak_pitch_deg": 0.0011660896311849888,
+      "peak_pitch_deg": 0.005832856451571887,
       "airborne_ticks": 2,
-      "max_closure_error_m": 1.9446196104871315e-05,
+      "max_closure_error_m": 1.930277023201938e-05,
       "final_position": [
-        -2.000274321370456,
-        3.744529433203454e-12,
-        0.26210230613774943
+        -11.50258556496914,
+        6.45000307229866,
+        0.2619882685196664
       ],
-      "physics_rtf": 12.414181804352317,
+      "physics_rtf": 13.637807997997259,
       "contacts": [
         "Ltire",
         "Rtire",
-        "ground"
+        "arena_floor"
       ]
     },
     {
       "name": "ramp",
-      "peak_pitch_deg": 1.3045126664093272,
-      "airborne_ticks": 253,
-      "max_closure_error_m": 0.0002208361593052715,
+      "peak_pitch_deg": 54.713919870856294,
+      "airborne_ticks": 1881,
+      "max_closure_error_m": 0.00042826405079827,
       "final_position": [
-        5.567885782405283,
-        -0.00031043176603591337,
-        0.33703241821415864
+        -4.554457062093189,
+        3.732085494892367,
+        0.3582212643613829
       ],
-      "physics_rtf": 12.603875627883532,
+      "physics_rtf": 13.177246217366186,
       "contacts": [
         "Ltire",
         "Rtire",
-        "ground",
+        "arena_floor",
+        "central_ramp_red",
+        "fortress_red",
         "launch_ramp",
-        "ramp_platform"
+        "ramp_platform",
+        "road_red",
+        "shell"
       ]
     },
     {
-      "name": "step",
-      "peak_pitch_deg": 3.2678253758224627,
-      "airborne_ticks": 97,
-      "max_closure_error_m": 5.07351506323158e-05,
+      "name": "rough",
+      "peak_pitch_deg": 17.49713022559097,
+      "airborne_ticks": 120,
+      "max_closure_error_m": 5.367639225745504e-05,
       "final_position": [
-        4.197871897796304,
-        2.299890322473229,
-        0.3371497016231621
+        -9.930389601254253,
+        -5.197299990387347,
+        0.35407366872127377
       ],
-      "physics_rtf": 13.035156723197044,
+      "physics_rtf": 12.37934778329821,
       "contacts": [
         "Ltire",
         "Rtire",
-        "ground",
-        "single_step"
+        "arena_floor",
+        "rough_lane_red",
+        "rough_red_00"
       ]
     }
   ],
   "render": {
     "sim_seconds": 3.959999999999675,
-    "wall_seconds": 1.5643166999943787,
-    "rendered_rtf": 2.5314567056746915,
-    "fps": 76.71080926287574
+    "wall_seconds": 2.0358382999984315,
+    "rendered_rtf": 1.9451446610483387,
+    "fps": 58.94377760753025
   }
 }

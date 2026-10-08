@@ -36,6 +36,14 @@ class Settings:
     impulse_time: float = 4.0
     q: tuple = (20.0,2.0,300.0,5.0)
     r: float = 0.1
+    base_mass: float = 1.0
+    body_mass: float = 5.0
+    payload_mass: float = 0.0
+    body_com_offset: float = 0.05
+    payload_com_offset: float = 0.18
+    body_inertia: float = 0.10
+    payload_inertia: float = 0.0
+    friction: float = 0.10
     length_pid: tuple = (700.0,100.0,35.0)
     roll_pid: tuple = (12.0,1.0,1.5)
     yaw_pid: tuple = (3.0,0.1,0.8)
@@ -62,9 +70,26 @@ class Settings:
                 raise ValueError('Event times must be nonnegative multiples of the control period.')
         if len(self.q)!=4 or min(self.q)<=0 or self.r<=0:
             raise ValueError('Four positive Q weights and positive R required.')
+        if self.base_mass<=0 or self.body_mass<=0 or self.payload_mass<0:
+            raise ValueError('Base/body mass must be positive; payload mass must be nonnegative.')
+        if not 0<self.body_com_offset<=.5 or not 0<=self.payload_com_offset<=.8:
+            raise ValueError('Body/payload COM offset is outside the supported range.')
+        if self.body_inertia<=0 or self.payload_inertia<0 or self.friction<0:
+            raise ValueError('Body inertia must be positive; payload inertia and friction must be nonnegative.')
         for gains in (self.length_pid,self.roll_pid,self.yaw_pid):
             if len(gains)!=3 or min(gains)<0: raise ValueError('PID gains must be three nonnegative values.')
         if min(self.wheel_limit,self.joint_limit)<=0: raise ValueError('Torque limits must be positive.')
+
+
+def effective_params(settings,height):
+    """Combine chassis and payload into the equivalent pitch plant."""
+    total_mass=settings.body_mass+settings.payload_mass
+    offset=(settings.body_mass*settings.body_com_offset+
+            settings.payload_mass*settings.payload_com_offset)/total_mass
+    inertia=(settings.body_inertia+settings.body_mass*(settings.body_com_offset-offset)**2+
+             settings.payload_inertia+settings.payload_mass*(settings.payload_com_offset-offset)**2)
+    return replace(PARAMS,base_mass=settings.base_mass,body_mass=total_mass,
+                   com_height=height+offset,body_inertia=inertia,friction=settings.friction)
 
 
 class NativeChassis:
@@ -88,18 +113,24 @@ class NativeChassis:
         self.dll.Chassis_Update.restype=ct.c_int
 
     def design(self,height,settings):
-        a,b=continuous_matrices(replace(PARAMS,com_height=height+0.05))
+        params=effective_params(settings,height)
+        a,b=continuous_matrices(params)
         ad,bd,p,k=np.empty((4,4)),np.empty(4),np.empty((4,4)),np.empty(4)
         q=np.array(settings.q,dtype=np.float64)
         count=self.dll.LQR_Design(a,b,q,settings.r,settings.control_dt,ad,bd,p,k)
         if count<0: raise RuntimeError(f'C Riccati design failed: status {count}.')
-        return dict(height=height,A=a.tolist(),B=b.tolist(),Ad=ad.tolist(),Bd=bd.tolist(),
+        plant=dict(base_mass=params.base_mass,body_mass=params.body_mass,
+                   com_height=params.com_height,body_inertia=params.body_inertia,
+                   friction=params.friction)
+        return dict(height=height,plant=plant,A=a.tolist(),B=b.tolist(),Ad=ad.tolist(),Bd=bd.tolist(),
                     P=p.tolist(),K=k.tolist(),iterations=count)
 
     def initialize(self,settings):
         designs=[self.design(h,settings) for h in (0.16,0.20,0.24)]
         gains=np.array([row['K'] for row in designs],dtype=np.float64)
-        tuning=np.array([*settings.length_pid,*settings.roll_pid,*settings.yaw_pid,settings.wheel_limit,settings.joint_limit],dtype=np.float64)
+        support_mass=settings.body_mass+settings.payload_mass
+        tuning=np.array([*settings.length_pid,*settings.roll_pid,*settings.yaw_pid,
+                         settings.wheel_limit,settings.joint_limit,support_mass],dtype=np.float64)
         if self.dll.Chassis_Init(gains,tuning,settings.control_dt): raise RuntimeError('C chassis initialization failed.')
         return designs
 
@@ -118,21 +149,23 @@ class NativeChassis:
         self.temp.cleanup()
 
 
-def derivative(state,output):
+def derivative(state,output,settings=None):
     """q=(p,theta,l): variable-length pendulum from T,V; l=h+0.05.
     Roll/yaw use reduced inertial equations. Fixed contact, massless link rods.
     This is not a full spatial rigid-body/contact model.
     """
+    if settings is None:settings=Settings()
     _,velocity,theta,omega,height,hdot,roll,roll_rate,yaw,yaw_rate=state
-    length=height+0.05
-    m=5.0
+    params=effective_params(settings,height)
+    length=params.com_height
+    m=params.body_mass
     sine,cosine=math.sin(theta),math.cos(theta)
-    mass=np.array([[6.0,m*length*cosine,m*sine],
-                   [m*length*cosine,0.10+m*length*length,0],
+    mass=np.array([[params.base_mass+m,m*length*cosine,m*sine],
+                   [m*length*cosine,params.body_inertia+m*length*length,0],
                    [m*sine,0,m]])
-    rhs=np.array([output[0]-0.1*velocity+m*length*sine*omega*omega-2*m*cosine*hdot*omega,
-                  m*9.81*length*sine-2*m*length*hdot*omega,
-                  output[1]+output[2]-m*9.81*cosine+m*length*omega*omega-2*hdot])
+    rhs=np.array([output[0]-params.friction*velocity+m*length*sine*omega*omega-2*m*cosine*hdot*omega,
+                  m*params.gravity*length*sine-2*m*length*hdot*omega,
+                  output[1]+output[2]-m*params.gravity*cosine+m*length*omega*omega-2*hdot])
     acc=np.linalg.solve(mass,rhs)
     return np.array([velocity,acc[0],omega,acc[1],hdot,acc[2],roll_rate,
                      (0.18*(output[1]-output[2])-0.2*roll_rate)/0.12,
@@ -161,15 +194,17 @@ def simulate(settings,progress=None,cancel=None):
                 if tick==command_tick:
                     reference[:]=[settings.target_position,settings.target_height,0,np.deg2rad(settings.target_yaw)]
                 if tick==impulse_tick and settings.impulse:
-                    length=state[4]+0.05;sine,cosine=np.sin(state[2]),np.cos(state[2])
-                    mass=np.array([[6,5*length*cosine,5*sine],[5*length*cosine,.1+5*length*length,0],[5*sine,0,5]])
+                    params=effective_params(settings,state[4]);length=params.com_height
+                    m=params.body_mass;sine,cosine=np.sin(state[2]),np.cos(state[2])
+                    mass=np.array([[params.base_mass+m,m*length*cosine,m*sine],
+                                   [m*length*cosine,params.body_inertia+m*length*length,0],[m*sine,0,m]])
                     state[[1,3,5]]+=np.linalg.solve(mass,[settings.impulse,0,0])
                 states[tick]=state;refs[tick]=reference
                 native.update(state,reference,applied)
                 outputs[tick]=applied
                 for _ in range(substeps):
-                    k1=derivative(state,applied);k2=derivative(state+dt*k1/2,applied)
-                    k3=derivative(state+dt*k2/2,applied);k4=derivative(state+dt*k3,applied)
+                    k1=derivative(state,applied,settings);k2=derivative(state+dt*k1/2,applied,settings)
+                    k3=derivative(state+dt*k2/2,applied,settings);k4=derivative(state+dt*k3,applied,settings)
                     state+=dt*(k1+2*k2+2*k3+k4)/6
                 if not np.all(np.isfinite(state)) or abs(state[2])>np.deg2rad(35) or abs(state[6])>0.15 or not 0.145<state[4]<0.265:
                     raise RuntimeError(f'Model left balance/leg domain at t={(tick+1)*settings.control_dt:.4f}s; check gains and torque limits.')

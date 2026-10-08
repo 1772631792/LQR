@@ -2,6 +2,7 @@
 import math
 import numpy as np
 from simulation.mujoco_bootstrap import mujoco
+from simulation.rmuc2026_map import arena_xml, collision_geom_names, spawn_pose
 
 
 def angles(height=.18,thigh_length=.135,calf_length=.24,joint_distance=.12):
@@ -85,12 +86,10 @@ def five_bar_xml(height=.18,terrain=True,min_leg_height=.15,max_leg_height=.30,
             act.append(f'<motor name="{name}_motor" joint="{name}" gear="1" ctrllimited="true" ctrlrange="{-limit:.10g} {limit:.10g}"/>')
     terrain_xml=''
     if terrain:
-        # Ramp mesh has a level top platform and a sharp drop; separate 4 cm step lane.
-        terrain_xml='''<geom name="launch_ramp" type="mesh" mesh="ramp" pos="0 0 0" rgba=".25 .38 .49 1" contype="1" conaffinity="1"/>
-        <geom name="ramp_platform" type="box" pos="2.1 0 .16" size=".5 .7 .16" rgba=".30 .45 .57 1" contype="1" conaffinity="1"/>
-        <geom name="single_step" type="box" pos=".8 2.3 .02" size=".8 .7 .02" rgba=".68 .48 .20 1" contype="1" conaffinity="1"/>
-        <geom name="step_marker" type="box" pos=".0 2.3 .041" size=".01 .7 .001" rgba="1 .8 .18 1" contype="0" conaffinity="0"/>
-        <geom name="ramp_marker" type="box" pos="2.58 0 .322" size=".015 .7 .002" rgba="1 .7 .1 1" contype="0" conaffinity="0"/>'''
+        terrain_xml=arena_xml()
+    spawn_x,spawn_y,spawn_z,_=spawn_pose('RM地图')
+    ground_xml=('''<geom name="ground" type="plane" pos="0 0 -.08" size="18 11 .1" material="groundmat" contype="0" conaffinity="0"/>'''
+                if terrain else '''<geom name="ground" type="plane" size="18 11 .1" material="groundmat" contype="1" conaffinity="1"/>''')
     return f'''<mujoco model="RoboMaster five-bar training arena">
       <compiler angle="radian"/>
       <option timestep=".001" integrator="implicitfast" solver="Newton" iterations="30" tolerance="1e-9" gravity="0 0 -9.81"/>
@@ -100,14 +99,14 @@ def five_bar_xml(height=.18,terrain=True,min_leg_height=.15,max_leg_height=.30,
         <texture type="skybox" builtin="gradient" rgb1=".25 .40 .58" rgb2=".85 .91 .96" width="512" height="3072"/>
         <texture name="groundtex" type="2d" builtin="checker" rgb1=".25 .31 .34" rgb2=".31 .37 .40" width="512" height="512"/>
         <material name="groundmat" texture="groundtex" texrepeat="24 24" reflectance=".02"/>
-        <mesh name="ramp" vertex="0 -.7 0  0 .7 0  1.6 -.7 0  1.6 .7 0  1.6 -.7 .32  1.6 .7 .32" face="0 2 1 1 2 3 0 4 2 1 3 5 0 1 5 0 5 4 2 4 5 2 5 3"/>
       </asset>
       <worldbody>
         <light pos="-3 -4 7" dir=".2 .3 -1" castshadow="true"/>
+        <light pos="0 0 14" dir="0 0 -1" diffuse=".75 .75 .75" specular=".05 .05 .05" castshadow="false"/>
         <light pos="1 3 4" dir="-.2 -.3 -1" diffuse=".4 .4 .4" specular=".1 .1 .1" castshadow="false"/>
-        <geom name="ground" type="plane" size="12 10 .1" material="groundmat" contype="1" conaffinity="1"/>
-        <body name="terrain"><geom type="box" pos="0 0 -.08" size="12 10 .05" rgba=".2 .25 .3 1"/>{terrain_xml}</body>
-        <body name="chassis" pos="-2 0 {height+.075}">
+        {ground_xml}
+        <body name="terrain">{terrain_xml}</body>
+        <body name="chassis" pos="{spawn_x} {spawn_y} {height+.075+spawn_z}">
           <freejoint name="base"/>
           <inertial pos="0 0 -.016" mass="7.645" diaginertia=".25 .16 .30"/>
           <geom name="shell" type="box" pos="0 0 .02" size=".17 .205 .06" rgba=".22 .30 .42 1" contype="1" conaffinity="1"/>
@@ -170,19 +169,19 @@ def serial_xml(height=.18,terrain=True,min_leg_height=.15,max_leg_height=.30,
             act.append(f'<motor name="{name}_motor" joint="{name}" gear="1" ctrllimited="true" ctrlrange="{-limit:.10g} {limit:.10g}"/>')
     terrain_xml=''
     if terrain:
-        terrain_xml='''<geom name="launch_ramp" type="mesh" mesh="ramp" pos="0 0 0" rgba=".25 .38 .49 1" contype="1" conaffinity="1"/>
-        <geom name="ramp_platform" type="box" pos="2.1 0 .16" size=".5 .7 .16" rgba=".30 .45 .57 1" contype="1" conaffinity="1"/>
-        <geom name="single_step" type="box" pos=".8 2.3 .02" size=".8 .7 .02" rgba=".68 .48 .20 1" contype="1" conaffinity="1"/>'''
+        terrain_xml=arena_xml()
+    spawn_x,spawn_y,spawn_z,_=spawn_pose('RM地图')
+    ground_xml=('''<geom name="ground" type="plane" pos="0 0 -.08" size="18 11 .1" material="groundmat" contype="0" conaffinity="0"/>'''
+                if terrain else '''<geom name="ground" type="plane" size="18 11 .1" material="groundmat" contype="1" conaffinity="1"/>''')
     return f'''<mujoco model="RoboMaster serial-leg training arena">
       <compiler angle="radian"/><option timestep=".001" integrator="implicitfast" solver="Newton" iterations="30" tolerance="1e-9" gravity="0 0 -9.81"/>
       <visual><global offwidth="1280" offheight="720"/><quality shadowsize="2048"/><map znear=".015" zfar="60"/></visual>
       <default><joint limited="false"/><geom contype="0" conaffinity="0" condim="3" solref=".006 1"/></default>
       <asset><texture type="skybox" builtin="gradient" rgb1=".25 .40 .58" rgb2=".85 .91 .96" width="512" height="3072"/>
-      <texture name="groundtex" type="2d" builtin="checker" rgb1=".25 .31 .34" rgb2=".31 .37 .40" width="512" height="512"/><material name="groundmat" texture="groundtex" texrepeat="24 24" reflectance=".02"/>
-      <mesh name="ramp" vertex="0 -.7 0  0 .7 0  1.6 -.7 0  1.6 .7 0  1.6 -.7 .32  1.6 .7 .32" face="0 2 1 1 2 3 0 4 2 1 3 5 0 1 5 0 5 4 2 4 5 2 5 3"/></asset>
-      <worldbody><light pos="-3 -4 7" dir=".2 .3 -1" castshadow="true"/><geom name="ground" type="plane" size="12 10 .1" material="groundmat" contype="1" conaffinity="1"/>
-      <body name="terrain"><geom type="box" pos="0 0 -.08" size="12 10 .05" rgba=".2 .25 .3 1"/>{terrain_xml}</body>
-      <body name="chassis" pos="-2 0 {height+.075}"><freejoint name="base"/><inertial pos="0 0 -.016" mass="7.645" diaginertia=".25 .16 .30"/>
+      <texture name="groundtex" type="2d" builtin="checker" rgb1=".25 .31 .34" rgb2=".31 .37 .40" width="512" height="512"/><material name="groundmat" texture="groundtex" texrepeat="28 15" reflectance=".02"/></asset>
+      <worldbody><light pos="-3 -4 7" dir=".2 .3 -1" castshadow="true"/><light pos="0 0 14" dir="0 0 -1" diffuse=".75 .75 .75" specular=".05 .05 .05" castshadow="false"/>{ground_xml}
+      <body name="terrain">{terrain_xml}</body>
+      <body name="chassis" pos="{spawn_x} {spawn_y} {height+.075+spawn_z}"><freejoint name="base"/><inertial pos="0 0 -.016" mass="7.645" diaginertia=".25 .16 .30"/>
       <geom name="shell" type="box" pos="0 0 .02" size=".17 .205 .06" rgba=".22 .30 .42 1" contype="1" conaffinity="1"/><geom type="box" pos="-.02 0 .095" size=".10 .14 .025" rgba=".6 .7 .8 1"/><site name="imu" size=".01"/>{''.join(legs)}</body></worldbody>
       <actuator>{''.join(act)}</actuator></mujoco>'''
 
@@ -198,8 +197,8 @@ def create(height=.18,terrain=True,min_leg_height=.15,max_leg_height=.30,leg_top
            thigh_length=.135,calf_length=.24,joint_distance=.12,wheel_distance=.52,wheel_torque_limit=8.,joint_torque_limit=35.):
     model=mujoco.MjModel.from_xml_string(xml(height,terrain,min_leg_height,max_leg_height,leg_topology,
                                              thigh_length,calf_length,joint_distance,wheel_distance,wheel_torque_limit,joint_torque_limit))
-    # All terrain geoms collide; decorative parts and rods remain noncolliding.
-    for name in ('launch_ramp','ramp_platform','single_step'):
+    # Key map features must remain collision enabled; markings and robot trim are visual only.
+    for name in collision_geom_names():
         index=mujoco.mj_name2id(model,mujoco.mjtObj.mjOBJ_GEOM,name)
         if index>=0:model.geom_contype[index]=model.geom_conaffinity[index]=1
     data=mujoco.MjData(model);mujoco.mj_forward(model,data)

@@ -36,6 +36,12 @@ def main():
         native.initialize(replace(settings,joint_limit=1))
         native.update(state,ref,out)
         assert np.max(abs(out[6:]))<=1.000001 and max(out[1:3])<24.525
+        payload_settings=replace(settings,payload_mass=1.0,payload_com_offset=.25,payload_inertia=.02)
+        payload_designs=native.initialize(payload_settings)
+        baseline_k=native.design(.20,settings)['K']
+        assert not np.allclose(payload_designs[1]['K'],baseline_k)
+        native.initialize(payload_settings);native.update(state,ref,out)
+        np.testing.assert_allclose(out[1:3],[29.43]*2,atol=1e-4)
     finally:native.close()
     baseline=simulate(Settings());s=baseline['states'];out=baseline['outputs'];tail=s[-1000:]
     assert max(abs(tail[:,2]))<np.deg2rad(.1)

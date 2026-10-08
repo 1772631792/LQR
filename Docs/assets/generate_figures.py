@@ -175,7 +175,94 @@ def serial_singularity():
     save(fig,'10_serial_singularity.png')
 
 
+def embedded_data_pipeline():
+    fig, ax = plt.subplots(figsize=(15, 8.2))
+    ax.axis('off'); ax.set_xlim(0, 15); ax.set_ylim(0, 8.2)
+    ax.text(7.5, 7.82, '下位机一周期：原始数据 → 状态量 → 控制量 → CAN',
+            ha='center', fontsize=19, weight='bold', color=NAVY)
+
+    columns = [
+        (0.25, '1  原始输入', [
+            'DM：位置 / 速度 / 力矩', 'DJI：编码器 / RPM / 电流',
+            'BMI088：陀螺仪 / 加速度', '遥控器、裁判系统、电容']),
+        (3.25, '2  入口处理', [
+            'CAN 解包与多圈计数', '零位、方向、减速比',
+            '四元数 EKF 与去重力', '目标整形、加速度限幅']),
+        (6.25, '3  状态估计', [
+            '五连杆 Link2Leg', '轮速刚体运动补偿',
+            '速度-加速度 Kalman', '支持力 / 离地估计']),
+        (9.25, '4  控制计算', [
+            '6 维状态误差', '腿长调度 LQR / MPC',
+            '航向、抗劈叉、腿长 PID', '重力与横向惯性补偿']),
+        (12.25, '5  执行输出', [
+            'VMC：虚拟力 → 关节力矩', '符号、倍率、限幅、急停',
+            'DM / DJI 协议打包', 'CAN 发送与反馈看门狗']),
+    ]
+    colors = [BLUE, '#3973b7', GREEN, ORANGE, RED]
+    for i, ((x, title, lines), color) in enumerate(zip(columns, colors)):
+        ax.add_patch(FancyBboxPatch((x, 2.0), 2.48, 4.85,
+                     boxstyle='round,pad=.06,rounding_size=.12',
+                     fc=color+'12', ec=color, lw=2.2))
+        ax.text(x+1.24, 6.45, title, ha='center', fontsize=13.5,
+                weight='bold', color=color)
+        for j, line in enumerate(lines):
+            yy = 5.65 - j*.88
+            ax.add_patch(FancyBboxPatch((x+.17, yy-.31), 2.14, .58,
+                         boxstyle='round,pad=.025,rounding_size=.05',
+                         fc='white', ec='#ccd5df', lw=1))
+            ax.text(x+1.24, yy, line, ha='center', va='center',
+                    fontsize=10.5, color=NAVY)
+        if i < len(columns)-1:
+            ax.annotate('', xy=(x+3.0, 4.45), xytext=(x+2.48, 4.45),
+                        arrowprops=dict(arrowstyle='-|>', lw=2.2, color=GREY))
+
+    ax.add_patch(FancyBboxPatch((3.1, .55), 8.8, .82,
+                 boxstyle='round,pad=.04,rounding_size=.08',
+                 fc=NAVY+'10', ec=NAVY, lw=1.6))
+    ax.text(7.5, .96,
+            '关键边界：LQR 只接收整理后的状态；MotorSetRef 只写参考值；电机任务才负责最终 CAN 帧',
+            ha='center', va='center', fontsize=12.5, color=NAVY, weight='bold')
+    save(fig, '11_embedded_data_to_can.png')
+
+
+def theory_engineering_comparison():
+    fig, ax = plt.subplots(figsize=(14, 8.3))
+    ax.axis('off'); ax.set_xlim(0, 14); ax.set_ylim(0, 8.3)
+    ax.text(7, 7.85, '从理论模型到真实轮腿工程：公式没有消失，而是被三层工程逻辑包围',
+            ha='center', fontsize=18, weight='bold', color=NAVY)
+
+    layers = [
+        (0.7, 5.45, 12.6, 1.65, '#e8f4f8', BLUE,
+         'A  与理论严格对应的核心',
+         '闭链几何  ·  速度雅可比  ·  VMC  $J^T$  ·  状态反馈  $u=Kx$  ·  腿长增益调度'),
+        (1.45, 3.35, 11.1, 1.55, '#eef7ef', GREEN,
+         'B  同一数学关系的离散与数值实现',
+         '采样与差分  ·  低通 / Kalman  ·  atan2 与装配分支  ·  单位和方向  ·  限幅与奇异保护'),
+        (2.2, 1.15, 9.6, 1.65, '#fff4e9', ORANGE,
+         'C  理想推导之外的真实系统功能',
+         'IMU 姿态估计  ·  航向 / 腿长 / 横滚 PID  ·  离地与跳跃状态机  ·  功率 / 看门狗 / CAN'),
+    ]
+    for x, y, w, h, fc, ec, title, detail in layers:
+        ax.add_patch(FancyBboxPatch((x, y), w, h,
+                     boxstyle='round,pad=.06,rounding_size=.12',
+                     fc=fc, ec=ec, lw=2.3))
+        ax.text(x+w/2, y+h*.66, title, ha='center', va='center',
+                fontsize=14, color=ec, weight='bold')
+        ax.text(x+w/2, y+h*.30, detail, ha='center', va='center',
+                fontsize=11.5, color=NAVY)
+    ax.annotate('', xy=(7, 5.12), xytext=(7, 4.92),
+                arrowprops=dict(arrowstyle='-|>', lw=2, color=GREY))
+    ax.annotate('', xy=(7, 3.05), xytext=(7, 2.82),
+                arrowprops=dict(arrowstyle='-|>', lw=2, color=GREY))
+    ax.text(7, .45,
+            '判断标准：改变 A 会改变控制原理；改变 B 会改变数值品质；改变 C 会改变实物可用性与安全性',
+            ha='center', fontsize=12.5, color=RED, weight='bold')
+    save(fig, '12_theory_vs_engineering.png')
+
+
 if __name__ == '__main__':
     mechanism();closure();jacobian();vmc();pipeline();singularity()
     serial_symbols();serial_inverse();serial_jacobian();serial_singularity()
-    print('generated 10 tutorial figures in', OUT)
+    embedded_data_pipeline()
+    theory_engineering_comparison()
+    print('generated 12 tutorial figures in', OUT)

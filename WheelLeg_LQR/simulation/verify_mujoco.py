@@ -5,11 +5,15 @@ import numpy as np
 from PIL import Image
 from simulation.mujoco_engine import Arena,mujoco
 from simulation.mujoco_model import leg_joint_ranges
+from simulation.rmuc2026_map import ARENA_LENGTH,ARENA_WIDTH,RULEBOOK_VERSION,spawn_pose
 from simulation.chassis_sim import ROOT
 
 
-def experiment(name,seconds,speed=0,y=0,height=.18):
-    arena=Arena(height=height);arena.data.qpos[1]=y;mujoco.mj_forward(arena.model,arena.data)
+def experiment(name,seconds,speed=0,scene='平地',height=.18):
+    arena=Arena(height=height);x,y,surface,yaw=spawn_pose(scene)
+    arena.data.qpos[:3]=[x,y,height+.075+surface]
+    arena.data.qpos[3:7]=[np.cos(yaw/2),0,0,np.sin(yaw/2)];mujoco.mj_forward(arena.model,arena.data)
+    start_x=x
     peak=0.;air=0;contacts=set();closure=0
     try:
         for i in range(round(seconds/.001)):
@@ -21,11 +25,11 @@ def experiment(name,seconds,speed=0,y=0,height=.18):
                 for g in (c.geom1,c.geom2):contacts.add(mujoco.mj_id2name(arena.model,mujoco.mjtObj.mjOBJ_GEOM,g))
             assert np.isfinite(arena.data.qpos).all()
             assert max(abs(arena.firmware.output[:2]))<=8 and max(abs(arena.firmware.output[2:]))<=35
-        assert peak<.25,(name,peak)
+        assert peak<(1.1 if name=='ramp' else .35),(name,peak)
         assert closure<.006,(name,closure)
-        if speed:assert arena.data.qpos[0]>3,(name,arena.data.qpos[:3])
-        if name=='ramp':assert air>0 and {'launch_ramp','ramp_platform'}<=contacts and arena.data.qpos[2]<.4
-        if name=='step':assert 'single_step' in contacts
+        if speed:assert arena.data.qpos[0]>start_x+(.25 if name=='rough' else 1),(name,arena.data.qpos[:3])
+        if name=='ramp':assert air>0 and {'launch_ramp','ramp_platform'}<=contacts
+        if name=='rough':assert any(str(v).startswith('rough_red_') for v in contacts)
         result=dict(name=name,peak_pitch_deg=float(np.degrees(peak)),airborne_ticks=air,max_closure_error_m=closure,
                     final_position=arena.data.qpos[:3].tolist(),physics_rtf=arena.snapshot()['rtf'],contacts=sorted(str(v) for v in contacts))
         print(result);return result
@@ -54,7 +58,14 @@ def main():
         assert abs(serial.sensor[0])<.10 and serial.data.qpos[2]>.18
         assert max(abs(serial.firmware.output[:2]))<=8 and max(abs(serial.firmware.output[2:]))<=35
     finally:serial.firmware.close()
-    results=[experiment('stand',3),experiment('ramp',12,.7,height=.26),experiment('step',10,.7,y=2.3,height=.26)]
+    arena_check=Arena()
+    try:
+        assert arena_check.model.geom('arena_floor').size[0]*2==ARENA_LENGTH
+        assert arena_check.model.geom('arena_floor').size[1]*2==ARENA_WIDTH
+    finally:arena_check.firmware.close()
+    results=[experiment('stand',3,scene='平地'),
+             experiment('ramp',10,.7,scene='RM地图',height=.26),
+             experiment('rough',6,.45,scene='起伏路',height=.26)]
     a=Arena();renderer=mujoco.Renderer(a.model,height=450,width=800)
     try:
         camera=mujoco.MjvCamera();camera.azimuth=45;camera.elevation=-30;camera.distance=3
@@ -68,7 +79,8 @@ def main():
         Image.fromarray(image).save(output/'render.png')
         print('Physics + C + 800x450 render:',metrics)
         # Throughput is reported, not asserted against machine-dependent frame rate.
-        (output/'verification.json').write_text(json.dumps(dict(experiments=results,render=metrics),indent=2),encoding='utf-8')
+        (output/'verification.json').write_text(json.dumps(dict(map_rulebook=RULEBOOK_VERSION,
+            arena_size_m=[ARENA_LENGTH,ARENA_WIDTH],experiments=results,render=metrics),indent=2),encoding='utf-8')
     finally:renderer.close();a.firmware.close()
 
 

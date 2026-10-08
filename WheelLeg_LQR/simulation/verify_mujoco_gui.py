@@ -33,13 +33,13 @@ def main():
         print('Live GUI:',panel.run['records'][-1,0],'sim seconds; status:',panel.note.get())
         panel.export();assert (output/'record.csv').exists()
         panel.start_run('replay');pump(1);assert panel.worker.is_alive();panel.halt();finish()
-        panel.scene.set('一级台阶');panel.duration.set('10');panel.start_run('batch');finish()
-        assert panel.run['qpos'][-1,0]>3
+        panel.scene.set('起伏路');panel.duration.set('10');panel.start_run('batch');finish()
+        assert panel.run['qpos'][-1,0]>-10.2
         panel.design();deadline=time.perf_counter()+60
         while panel.design_busy and time.perf_counter()<deadline:root.update();time.sleep(.01)
         assert panel.report is not None
         panel.copy_matrix();assert root.clipboard_get()==matrix_initializer(panel.value())
-        panel.use_generated.set(True);panel.duration.set('2');panel.start_run('batch');finish()
+        panel.scene.set('平地');panel.use_generated.set(True);panel.duration.set('2');panel.start_run('batch');finish()
         assert np.max(np.abs(panel.run['records'][:,1]))<.2
         assert panel.run['initial_height']==.26
         panel.start_run('replay');pump(2.6);assert panel.worker.is_alive();panel.halt();finish()

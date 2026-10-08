@@ -13,7 +13,7 @@ from simulation.chassis_sim import Settings,simulate,save_run,ROOT
 from simulation.chassis_view import curves,view2d,view3d
 from simulation.parameter_guide import ParameterGuide,PARAMETERS
 from simulation.robot_settings import RobotSettingsDialog,DEFAULT_ROBOT_CONFIG
-from simulation.ui_theme import apply_theme,page_header,COLORS
+from simulation.ui_theme import apply_theme,page_header
 
 
 def matrix_values(result,node,key):
@@ -35,15 +35,13 @@ class HostApp:
         self.root=root;root.title('WheelLeg Studio');root.geometry('1380x900');root.minsize(1120,740)
         self.result=None;self.worker=None;self.cancel=threading.Event();self.messages=queue.Queue()
         self.playing=False;self.current=0.;self.internal_seek=False;self.closed=False;self.cursors={}
-        self.fields={};self.canvases={};self.figures={}
+        self.fields={};self.canvases={};self.figures={};self.view_play_buttons={}
         self.robot_config=dict(DEFAULT_ROBOT_CONFIG)
         apply_theme(root)
         bar=ttk.Frame(root,style='Toolbar.TFrame',padding=(18,11));bar.pack(fill='x')
         ttk.Label(bar,text='WheelLeg Studio',style='Title.TLabel').pack(side='left',padx=(0,24))
-        self.start=ttk.Button(bar,text='▶  运行仿真',style='Primary.TButton',command=self.compute);self.start.pack(side='left')
-        self.stop=ttk.Button(bar,text='停止',style='Danger.TButton',command=self.cancel.set,state='disabled');self.stop.pack(side='left',padx=8)
-        ttk.Button(bar,text='导出结果',command=self.export).pack(side='left')
-        self.progress=ttk.Progressbar(bar,length=150,maximum=100);self.progress.pack(side='right',padx=(12,0))
+        ttk.Button(bar,text='▶  MuJoCo 实景',style='Primary.TButton',command=lambda:self.select_page('MuJoCo 实景')).pack(side='left')
+        ttk.Label(bar,text='主仿真与实物验证',style='Secondary.TLabel').pack(side='left',padx=12)
         ttk.Button(bar,text='⚙  设置',command=self.show_robot_settings).pack(side='right')
         workspace=ttk.Frame(root);workspace.pack(fill='both',expand=True)
         self.sidebar=ttk.Frame(workspace,style='Sidebar.TFrame',width=198,padding=(12,15));self.sidebar.pack(side='left',fill='y');self.sidebar.pack_propagate(False)
@@ -56,6 +54,14 @@ class HostApp:
         self.make_matrix_panel()
         for name in ('平衡曲线','腿长与电机','二维机构','三维底盘'):
             fig=Figure(figsize=(11,6),dpi=100)
+            if name in ('二维机构','三维底盘'):
+                controls=ttk.Frame(self.pages[name],style='Surface.TFrame',padding=(10,7));controls.pack(fill='x',pady=(0,6))
+                title='二维机构运动' if name=='二维机构' else '三维底盘运动'
+                ttk.Label(controls,text=title,style='Section.TLabel').pack(side='left')
+                ttk.Label(controls,text='简化模型 · 无碰撞',style='Secondary.TLabel').pack(side='left',padx=10)
+                button=ttk.Button(controls,text='▶  播放简化运动',style='Primary.TButton',command=self.toggle_play)
+                button.pack(side='right');self.view_play_buttons[name]=button
+                ttk.Button(controls,text='↶  回到起点',style='Compact.TButton',command=self.rewind).pack(side='right',padx=7)
             canvas=FigureCanvasTkAgg(fig,master=self.pages[name]);canvas.get_tk_widget().pack(fill='both',expand=True)
             NavigationToolbar2Tk(canvas,self.pages[name])
             self.figures[name]=fig;self.canvases[name]=canvas
@@ -79,10 +85,10 @@ class HostApp:
         ttk.Label(playback,text='倍速').pack(side='left');self.speed=tk.StringVar(value='1')
         ttk.Combobox(playback,textvariable=self.speed,values=['0.25','0.5','1','2','4'],state='readonly',width=5).pack(side='left',padx=4)
         self.speed.trace_add('write',lambda *_:self.reset_clock())
-        self.status=tk.StringVar(value='就绪 · F5 运行 · Esc 停止 · Ctrl+E 导出 · Ctrl+, 设置')
+        self.status=tk.StringVar(value='就绪 · 先运行简化计算预览生成 C 矩阵；场地与接触验证使用 MuJoCo')
         self.status_label=ttk.Label(root,textvariable=self.status,style='Status.TLabel');self.status_label.pack(fill='x')
         self.tabs.bind('<<NotebookTabChanged>>',lambda _:self.render())
-        root.bind('<F5>',lambda _:self.compute())
+        root.bind('<F5>',lambda _:self.select_page('MuJoCo 实景'))
         root.bind('<Escape>',lambda _:self.cancel.set())
         root.bind('<Control-e>',lambda _:self.export())
         root.bind('<Control-comma>',lambda _:self.show_robot_settings())
@@ -92,13 +98,15 @@ class HostApp:
     def make_sidebar(self):
         self.nav_buttons={}
         groups=[('设计',('仿真设置','C算法与增益')),
-                ('分析',('平衡曲线','腿长与电机','参数导览')),
                 ('模型',('二维机构','三维底盘')),
+                ('预览分析',('平衡曲线','腿长与电机','参数导览')),
                 ('实景与部署',('MuJoCo 实景','生产代码导出'))]
+        labels={'仿真设置':'简化计算预览','平衡曲线':'预览状态曲线','腿长与电机':'预览腿长/电机'}
         for heading,names in groups:
             ttk.Label(self.sidebar,text=heading.upper(),style='SidebarHeading.TLabel').pack(fill='x',padx=7,pady=(9,4))
             for name in names:
-                button=ttk.Button(self.sidebar,text=name,style='Nav.TButton',command=lambda n=name:self.select_page(n))
+                label=labels.get(name,name)
+                button=ttk.Button(self.sidebar,text=label,style='Nav.TButton',command=lambda n=name:self.select_page(n))
                 button.pack(fill='x',pady=1);self.nav_buttons[name]=button
         ttk.Frame(self.sidebar,style='Sidebar.TFrame').pack(fill='both',expand=True)
         ttk.Label(self.sidebar,text='C 控制器 · MuJoCo\n生成代码 · 外部 PID',style='Sidebar.TLabel',foreground='#86868b',justify='left').pack(anchor='w',padx=8,pady=8)
@@ -130,8 +138,12 @@ class HostApp:
 
     def make_matrix_panel(self):
         page=self.pages['C算法与增益']
-        page_header(page,'控制器设计','查看离散模型、Riccati 解和各腿长节点的反馈增益。')
-        controls=ttk.Frame(page);controls.pack(fill='x',pady=(0,10))
+        page_header(page,'控制器设计','配置负载、质心、Q/R 后，由 C 端 Riccati 重新生成各腿长节点的反馈增益。')
+        self.k_design_book=ttk.Notebook(page);self.k_design_book.pack(fill='both',expand=True)
+        tuning_page=ttk.Frame(self.k_design_book,padding=12);result_page=ttk.Frame(self.k_design_book,padding=8)
+        self.k_design_book.add(tuning_page,text='K矩阵生成参数');self.k_design_book.add(result_page,text='矩阵结果')
+        self.k_result_page=result_page;self.make_k_design_settings(tuning_page)
+        controls=ttk.Frame(result_page);controls.pack(fill='x',pady=(0,10))
         ttk.Label(controls,text='腿长节点').pack(side='left',padx=5)
         self.matrix_node=ttk.Combobox(controls,values=['0.16 m','0.20 m','0.24 m'],state='readonly',width=10)
         self.matrix_node.current(1);self.matrix_node.pack(side='left')
@@ -143,12 +155,12 @@ class HostApp:
         self.matrix_node.bind('<<ComboboxSelected>>',lambda _:self.refresh_matrix())
         self.matrix_key.bind('<<ComboboxSelected>>',lambda _:self.refresh_matrix())
         self.matrix_caption=tk.StringVar(value='完成计算后可复制。只包含矩阵，不包含说明、日志或其他控制参数。')
-        ttk.Label(page,textvariable=self.matrix_caption).pack(anchor='w',pady=5)
-        preview=ttk.LabelFrame(page,text='所选矩阵 · 只读预览',padding=5);preview.pack(fill='x')
+        ttk.Label(result_page,textvariable=self.matrix_caption).pack(anchor='w',pady=5)
+        preview=ttk.LabelFrame(result_page,text='所选矩阵 · 只读预览',padding=5);preview.pack(fill='x')
         self.matrix_text=tk.Text(preview,height=7,font=('Consolas',11),wrap='none',state='disabled')
         scroll=ttk.Scrollbar(preview,orient='horizontal',command=self.matrix_text.xview)
         self.matrix_text.configure(xscrollcommand=scroll.set);self.matrix_text.pack(fill='x');scroll.pack(fill='x')
-        details=ttk.LabelFrame(page,text='本次计算详情（不会进入矩阵剪贴板）',padding=5);details.pack(fill='both',expand=True,pady=(10,0))
+        details=ttk.LabelFrame(result_page,text='本次计算详情（不会进入矩阵剪贴板）',padding=5);details.pack(fill='both',expand=True,pady=(10,0))
         self.design_text=tk.Text(details,font=('Consolas',10),wrap='none')
         sy=ttk.Scrollbar(details,command=self.design_text.yview);sy.pack(side='right',fill='y')
         sx=ttk.Scrollbar(details,orient='horizontal',command=self.design_text.xview);sx.pack(side='bottom',fill='x')
@@ -156,6 +168,48 @@ class HostApp:
         self.design_text.pack(fill='both',expand=True)
         self.design_text.insert('end','计算后显示 C 求解结果；Python 不求解控制增益。')
         self.design_text.configure(state='disabled')
+
+    def make_k_design_settings(self,page):
+        ttk.Label(page,text='K 矩阵生成参数',style='PageTitle.TLabel').pack(anchor='w')
+        ttk.Label(page,text='负载或云台变化时，应同时更新质量、质心和惯量，再调 Q/R。生成过程：物理参数 → A/B → 离散化 → C DARE → K。',
+                  style='Secondary.TLabel').pack(anchor='w',pady=(3,12))
+        body=ttk.Frame(page);body.pack(fill='both',expand=True)
+        model=ttk.LabelFrame(body,text='等效模型与负载',padding=12);model.pack(side='left',fill='both',expand=True,padx=(0,6))
+        weights=ttk.LabelFrame(body,text='LQR 权重与生成',padding=12);weights.pack(side='left',fill='both',expand=True,padx=(6,0))
+        model_fields=[
+            ('轮组/底座等效质量','base_mass','kg','随车轮平移但不参与倒立的质量'),
+            ('机身固定质量','body_mass','kg','不含后加云台或临时负载'),
+            ('附加载荷/云台质量','payload_mass','kg','允许为 0'),
+            ('机身质心高于腿端','body_com_offset','m','与当前有效腿长相加'),
+            ('负载质心高于腿端','payload_com_offset','m','云台越高，该值通常越大'),
+            ('机身俯仰惯量','body_inertia','kg·m²','绕机身自身质心'),
+            ('负载俯仰惯量','payload_inertia','kg·m²','绕负载自身质心，允许为 0'),
+            ('平移粘性阻尼','friction','N·s/m','轮地等效阻尼'),
+        ]
+        for row,(label,key,unit,hint) in enumerate(model_fields):
+            ttk.Label(model,text=label).grid(row=row,column=0,sticky='w',pady=5)
+            ttk.Entry(model,textvariable=self.fields[key],width=11).grid(row=row,column=1,sticky='w',padx=7,pady=5)
+            ttk.Label(model,text=unit,style='Secondary.TLabel').grid(row=row,column=2,sticky='w',pady=5)
+            ttk.Label(model,text=hint,style='Secondary.TLabel').grid(row=row,column=3,sticky='w',padx=(10,0),pady=5)
+        ttk.Label(weights,text='Q 对角 [位置, 速度, 俯仰, 俯仰角速度]').grid(row=0,column=0,sticky='w',pady=5)
+        ttk.Entry(weights,textvariable=self.fields['q'],width=30).grid(row=1,column=0,sticky='ew',pady=(0,10))
+        ttk.Label(weights,text='数值越大，越强调对应状态误差。俯仰过软可增大第 3 项；噪声放大时谨慎增大速度项。',
+                  style='Secondary.TLabel',wraplength=360,justify='left').grid(row=2,column=0,sticky='w')
+        ttk.Label(weights,text='R：驱动力使用代价').grid(row=3,column=0,sticky='w',pady=(16,5))
+        ttk.Entry(weights,textvariable=self.fields['r'],width=14).grid(row=4,column=0,sticky='w')
+        ttk.Label(weights,text='R 越大动作越柔和；R 越小响应更强，但更容易饱和或放大噪声。',
+                  style='Secondary.TLabel',wraplength=360,justify='left').grid(row=5,column=0,sticky='w',pady=(5,0))
+        ttk.Label(weights,text='C 控制周期 Ts').grid(row=6,column=0,sticky='w',pady=(16,5))
+        ttk.Entry(weights,textvariable=self.fields['control_dt'],width=14).grid(row=7,column=0,sticky='w')
+        ttk.Button(weights,text='生成 K 并运行简化验证',style='Primary.TButton',command=self.compute_k_design).grid(
+            row=8,column=0,sticky='ew',pady=(22,7))
+        ttk.Button(weights,text='恢复全部默认参数',style='Compact.TButton',command=self.reset_preview_defaults).grid(row=9,column=0,sticky='ew')
+        ttk.Label(weights,text='生成成功后到“矩阵结果”复制 K。修改参数不会改变上一组已完成结果，必须重新生成。',
+                  style='Secondary.TLabel',wraplength=360,justify='left').grid(row=10,column=0,sticky='w',pady=(14,0))
+
+    def compute_k_design(self):
+        if self.compute():
+            self.status.set('正在按新的负载、质心、Q/R 和控制周期生成 K，并运行简化闭环验证……')
 
     def refresh_matrix(self):
         if self.result is None:return
@@ -186,35 +240,68 @@ class HostApp:
         self.tabs.select(self.pages[tab]);self.render()
         self.status.set(f'{self.guide.parameter(key)[0]} → {tab} 第 {index+1} 张子图（浅橙色高亮）。')
 
-    def entry(self,group,label,key,value):
-        row=len(group.grid_slaves())//2
-        ttk.Label(group,text=label).grid(row=row,column=0,sticky='w',padx=8,pady=5)
-        var=tk.StringVar(value=str(value));self.fields[key]=var
-        ttk.Entry(group,textvariable=var,width=19).grid(row=row,column=1,sticky='ew',padx=8,pady=5)
-
     def make_settings(self):
         page=self.pages['仿真设置'];defaults=Settings()
-        header=ttk.Frame(page);header.grid(row=0,column=0,columnspan=3,sticky='ew',pady=(2,12))
-        ttk.Label(header,text='仿真实验',style='PageTitle.TLabel').pack(anchor='w')
-        ttk.Label(header,text='设置工况、控制器和执行器参数，然后从顶部运行。',style='Secondary.TLabel').pack(anchor='w',pady=(3,0))
+        values={key:(' '.join(map(str,value)) if isinstance(value,tuple) else str(value)) for key,value in vars(defaults).items()}
+        values['fps']='20';self.fields={key:tk.StringVar(value=value) for key,value in values.items()}
+        page_header(page,'简化计算预览','先运行轻量模型生成 C 矩阵与增益，再到“C算法与增益”查看；接触和场地验证使用 MuJoCo。')
+        actions=ttk.Frame(page,style='Surface.TFrame',padding=(14,11));actions.pack(fill='x',pady=(0,10))
+        self.preview_start=ttk.Button(actions,text='▶  运行简化预览',style='Primary.TButton',command=self.compute);self.preview_start.pack(side='left')
+        self.stop=ttk.Button(actions,text='停止',style='Danger.TButton',command=self.cancel.set,state='disabled');self.stop.pack(side='left',padx=7)
+        ttk.Button(actions,text='导出预览结果',command=self.export).pack(side='left')
+        ttk.Button(actions,text='恢复默认值',style='Compact.TButton',command=self.reset_preview_defaults).pack(side='left',padx=7)
+        self.progress=ttk.Progressbar(actions,length=150,maximum=100);self.progress.pack(side='right')
+        ttk.Label(actions,text='固定地面 · 无碰撞 · 教学用降阶模型',style='Secondary.TLabel').pack(side='right',padx=12)
+
+        basic=ttk.LabelFrame(page,text='姿态与目标',padding=12);basic.pack(fill='x')
+        essentials=[('预览时长 s','duration'),('初始俯仰 °','initial_pitch'),('初始横滚 °','initial_roll'),
+                    ('初始腿长 m','initial_height'),('目标腿长 m','target_height'),('目标位置 m','target_position'),('目标航向 °','target_yaw')]
+        for column,(label,key) in enumerate(essentials):
+            cell=ttk.Frame(basic);cell.grid(row=0,column=column,sticky='ew',padx=(0 if column==0 else 7,0))
+            basic.columnconfigure(column,weight=1)
+            ttk.Label(cell,text=label,style='Secondary.TLabel').pack(anchor='w')
+            ttk.Entry(cell,textvariable=self.fields[key],width=12).pack(fill='x',pady=(4,0))
+
+        toggle=ttk.Frame(page);toggle.pack(fill='x',pady=(10,0))
+        self.preview_advanced_button=ttk.Button(toggle,text='高级参数  ▾',style='Compact.TButton',command=self.toggle_preview_advanced)
+        self.preview_advanced_button.pack(side='left')
+        ttk.Label(toggle,text='控制周期、Q/R、执行器、扰动与 PID；通常无需修改。',style='Secondary.TLabel').pack(side='left',padx=10)
+        self.preview_advanced_visible=False
+        self.preview_advanced=ttk.Frame(page,style='Surface.TFrame',padding=(8,10))
         groups=[]
-        for column,title in enumerate(('时间与工况（秒、米、度）','C LQR / 执行器','C PID 参数（Kp Ki Kd）')):
-            group=ttk.LabelFrame(page,text=title,padding=12);group.grid(row=1,column=column,sticky='new',padx=6,pady=4)
-            page.columnconfigure(column,weight=1);groups.append(group)
-        for label,key in [('仿真总时长','duration'),('C 控制周期 Ts','control_dt'),('物理积分步长','physics_dt'),
-                          ('初始俯仰角','initial_pitch'),('初始横滚角','initial_roll'),('初始腿长','initial_height'),
-                          ('目标腿长','target_height'),('目标位置','target_position'),('目标航向角','target_yaw'),('指令阶跃时刻','command_time')]:
-            self.entry(groups[0],label,key,getattr(defaults,key))
-        for label,key in [('Q：位置 速度 俯仰 角速度','q'),('R：输入代价','r'),('轮电机限幅 Nm','wheel_limit'),('关节电机限幅 Nm','joint_limit'),
-                          ('扰动冲量 N·s','impulse'),('扰动时刻 s','impulse_time')]:
-            value=getattr(defaults,key);self.entry(groups[1],label,key,' '.join(map(str,value)) if isinstance(value,tuple) else value)
-        self.entry(groups[1],'播放帧率 FPS','fps',20)
+        for column,title in enumerate(('数值与扰动','执行器','PID（Kp Ki Kd）')):
+            group=ttk.LabelFrame(self.preview_advanced,text=title,padding=10);group.grid(row=0,column=column,sticky='nsew',padx=5)
+            self.preview_advanced.columnconfigure(column,weight=1);groups.append(group)
+        for label,key in [('C 控制周期 Ts','control_dt'),('物理积分步长','physics_dt'),('指令阶跃时刻','command_time'),
+                          ('扰动冲量 N·s','impulse'),('扰动时刻 s','impulse_time'),('播放帧率 FPS','fps')]:
+            self.preview_entry(groups[0],label,key)
+        for label,key in [('轮电机限幅 Nm','wheel_limit'),('关节电机限幅 Nm','joint_limit')]:
+            self.preview_entry(groups[1],label,key)
         for label,key in [('左右腿长 PID','length_pid'),('横滚角 PID','roll_pid'),('航向角 PID','yaw_pid')]:
-            self.entry(groups[2],label,key,' '.join(map(str,getattr(defaults,key))))
+            self.preview_entry(groups[2],label,key)
         self.control_summary=tk.StringVar(value=self.topology_control_text())
-        ttk.Label(groups[2],textvariable=self.control_summary,justify='left').grid(row=3,column=0,columnspan=2,padx=8,pady=20,sticky='w')
+        ttk.Label(groups[2],textvariable=self.control_summary,justify='left',style='Secondary.TLabel').grid(row=3,column=0,columnspan=2,padx=8,pady=(14,4),sticky='w')
         self.model_summary=tk.StringVar(value=self.topology_model_text())
-        ttk.Label(page,textvariable=self.model_summary,wraplength=1150,justify='left',style='Secondary.TLabel').grid(row=2,column=0,columnspan=3,sticky='w',padx=12,pady=16)
+        ttk.Label(page,textvariable=self.model_summary,wraplength=1150,justify='left',style='Secondary.TLabel').pack(anchor='w',padx=4,pady=14)
+
+    def preview_entry(self,parent,label,key):
+        row=len(parent.grid_slaves())//2
+        ttk.Label(parent,text=label).grid(row=row,column=0,sticky='w',padx=6,pady=4)
+        ttk.Entry(parent,textvariable=self.fields[key],width=20).grid(row=row,column=1,sticky='ew',padx=6,pady=4)
+        parent.columnconfigure(1,weight=1)
+
+    def toggle_preview_advanced(self):
+        self.preview_advanced_visible=not self.preview_advanced_visible
+        if self.preview_advanced_visible:
+            self.preview_advanced.pack(fill='x',after=self.preview_advanced_button.master,pady=(7,0))
+            self.preview_advanced_button.configure(text='收起高级参数  ▴')
+        else:
+            self.preview_advanced.pack_forget();self.preview_advanced_button.configure(text='高级参数  ▾')
+
+    def reset_preview_defaults(self):
+        defaults=Settings()
+        for key,value in vars(defaults).items():self.fields[key].set(' '.join(map(str,value)) if isinstance(value,tuple) else str(value))
+        self.fields['fps'].set('20');self.status.set('简化计算预览参数已恢复默认值。')
 
     def topology_control_text(self):
         mapping='串联腿二连杆雅可比映射' if self.robot_config.get('leg_topology')=='serial' else '五连杆 VMC'
@@ -236,18 +323,18 @@ class HostApp:
         settings=Settings(**kwargs);settings.validate();return settings
 
     def compute(self):
-        if self.worker and self.worker.is_alive(): return
+        if self.worker and self.worker.is_alive(): return False
         try: settings=self.read_settings()
-        except (ValueError,TypeError) as exc: messagebox.showerror('参数错误',str(exc));return
-        self.playing=False;self.cancel.clear();self.progress['value']=0
-        self.start['state']='disabled';self.stop['state']='normal';self.status.set('正在后台计算：C 求增益并运行闭环……')
+        except (ValueError,TypeError) as exc: messagebox.showerror('参数错误',str(exc));return False
+        self.playing=False;self.update_play_buttons();self.cancel.clear();self.progress['value']=0
+        self.preview_start['state']='disabled';self.stop['state']='normal';self.status.set('正在运行简化计算预览：C 求增益并运行降阶闭环……')
         def worker():
             try:
                 result=simulate(settings,lambda progress:self.messages.put(('progress',progress)),self.cancel)
                 self.messages.put(('done',result))
             except InterruptedError: self.messages.put(('cancelled',None))
             except Exception as exc: self.messages.put(('error',str(exc)))
-        self.worker=threading.Thread(target=worker,daemon=True);self.worker.start()
+        self.worker=threading.Thread(target=worker,daemon=True);self.worker.start();return True
 
     def accept_result(self,result):
         self.playing=False;self.result=result;self.current=0
@@ -261,10 +348,10 @@ class HostApp:
         text+=f'仿真 {result["time"][-1]:g} s；计算耗时 {result["elapsed"]:.3f} s\n'
         text+=json.dumps({'settings':result['settings'],'C_designs':result['designs']},indent=2)
         self.design_text.insert('end',text)
-        self.design_text.configure(state='disabled');self.refresh_matrix()
+        self.design_text.configure(state='disabled');self.refresh_matrix();self.k_design_book.select(self.k_result_page)
         self.guide.set_sample(result['states'][0],result['outputs'][0],0.)
-        self.status.set(f'计算完成：{result["time"][-1]:g} 秒仿真，耗时 {result["elapsed"]:.3f} 秒。点击播放或拖动时间轴。')
-        self.tabs.select(self.pages['参数导览']);self.render()
+        self.status.set(f'简化预览已生成：{result["time"][-1]:g} 秒，耗时 {result["elapsed"]:.3f} 秒。可进入二维机构或三维底盘播放。')
+        self.update_play_buttons();self.render()
 
     def poll(self):
         if self.closed:return
@@ -273,7 +360,7 @@ class HostApp:
                 kind,value=self.messages.get_nowait()
                 if kind=='progress':self.progress['value']=100*value
                 else:
-                    self.start['state']='normal';self.stop['state']='disabled'
+                    self.preview_start['state']='normal';self.stop['state']='disabled'
                     if kind=='done':self.progress['value']=100;self.accept_result(value)
                     elif kind=='error':self.status.set('计算失败：'+value);messagebox.showerror('仿真失败',value)
                     else:self.status.set('计算已取消，保留上一组完成的结果。')
@@ -292,23 +379,29 @@ class HostApp:
             if self.loop.get():
                 position%=end;self.anchor_time=position;self.anchor_wall=now
             else:
-                position=end;self.playing=False
+                position=end;self.playing=False;self.update_play_buttons()
         self.current=position
 
     def reset_clock(self):
         self.anchor_time=self.current;self.anchor_wall=time.perf_counter()
 
     def toggle_play(self):
-        if self.result is None:return
+        if self.result is None:
+            self.status.set('请先在“简化计算预览”运行一次，再播放二维或三维运动。');return
         if self.current>=self.result['time'][-1]:self.current=0
-        self.playing=not self.playing;self.reset_clock()
+        self.playing=not self.playing;self.reset_clock();self.update_play_buttons()
+
+    def update_play_buttons(self):
+        text='Ⅱ  暂停简化运动' if self.playing else '▶  播放简化运动'
+        for button in self.view_play_buttons.values():button.configure(text=text)
+        self.play_button.configure(text='Ⅱ  暂停' if self.playing else '▶  播放 / 暂停')
 
     def seek(self,value):
         if self.internal_seek or self.result is None:return
         self.current=float(value);self.reset_clock();self.render()
 
     def rewind(self):
-        self.playing=False;self.seek('0');self.slider.set(0)
+        self.playing=False;self.seek('0');self.slider.set(0);self.update_play_buttons()
 
     def render(self):
         name=self.tabs.tab(self.tabs.select(),'text')
