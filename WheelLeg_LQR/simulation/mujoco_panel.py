@@ -272,7 +272,7 @@ class MuJoCoPanel(ttk.Frame):
                     camera.azimuth,camera.elevation,camera.distance=controls['camera']
                     camera.azimuth+=np.degrees(heading)
                     if controls['overview']:
-                        camera.lookat[:]=[0,0,.15];camera.azimuth=90;camera.elevation=-58;camera.distance=19
+                        camera.lookat[:]=[0,0,.15];camera.azimuth=90;camera.elevation=-65;camera.distance=29
                     renderer.update_scene(arena.data,camera);pixels=renderer.render().copy();frames+=1
                     elapsed=max(time.perf_counter()-start,.001)
                     hud=f"{mode} | t={arena.data.time:.2f}s | physics {arena.snapshot()['rtf']:.1f}x | wall {arena.data.time/elapsed:.2f}x | {frames/elapsed:.0f} FPS"

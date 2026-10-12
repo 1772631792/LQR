@@ -4,12 +4,13 @@ from tkinter import ttk
 import numpy as np
 from simulation.robot_view import geometry as five_bar_geometry
 from simulation.serial_leg_view import geometry as serial_geometry
+from simulation.control_explainer import add_control_explanation
 
 # (Chinese name, symbol, destination tab, subplot index, explanation)
 PARAMETERS = {
     'pos': ('水平位置', 'p', '平衡曲线', 0, '轮轴沿前进方向的位置。单位 m，向前为正；它是 LQR 第 1 个状态。'),
     'vel': ('前进速度', 'v = dp/dt', '平衡曲线', 1, '水平位置的变化率。单位 m/s；它是 LQR 第 2 个状态。'),
-    'pitch': ('机体俯仰角', 'theta / pitch', '平衡曲线', 2, '机体相对竖直方向的前后倾角，前倾为正。内部 rad，曲线显示 deg；LQR 第 3 个状态。不是髋关节角。'),
+    'pitch': ('机体俯仰角', 'pitch（机身）', '平衡曲线', 2, '机体相对竖直方向的前后倾角，简化预览中前倾为正。内部 rad，曲线显示 deg；四状态简化模型中是第 3 项，六状态实景模型中是第 5 项。不是髋角，也不是实景的虚拟腿摆角 theta。'),
     'roll': ('机体横滚角', 'roll', '平衡曲线', 3, '机体左右倾斜角，左侧抬高为正。横滚 PID 调整左右支撑力差；它不属于四状态 LQR。'),
     'yaw': ('机体航向角', 'yaw', '平衡曲线', 4, '从上方看，车头在水平面内的转角。左转为正；航向 PID 通过左右轮差动实现转向。'),
     'left_height': ('左腿有效长度', 'hL = h + 0.18*roll', '腿长与电机', 0, '左侧五连杆：髋中点到轮轴的有效伸缩长度，单位 m。不是某根杆的长度。左右按机器人自身朝向定义。'),
@@ -40,9 +41,12 @@ class ParameterGuide(ttk.Frame):
         self.robot_config=robot_config or {'leg_topology':'five_bar'}
         self.on_curve=on_curve;self.selected='pitch';self.hovered=None;self.pinned=False
         self.state=np.array([0,0,np.deg2rad(10),0,.2,0,0,0,0,0.]);self.output=None;self.timestamp=None
-        self.canvas=tk.Canvas(self,bg='#f4f7fb',highlightthickness=0,width=850,height=560)
+        self.book=ttk.Notebook(self);self.book.pack(fill='both',expand=True)
+        overview=ttk.Frame(self.book);self.book.add(overview,text='机构与简化记录')
+        self.angle_explainer=add_control_explanation(self.book,self.robot_config.get('leg_topology')=='serial')
+        self.canvas=tk.Canvas(overview,bg='#f4f7fb',highlightthickness=0,width=850,height=560)
         self.canvas.pack(side='left',fill='both',expand=True)
-        panel=ttk.Frame(self,padding=15,width=260);panel.pack(side='right',fill='y');panel.pack_propagate(False)
+        panel=ttk.Frame(overview,padding=15,width=260);panel.pack(side='right',fill='y');panel.pack_propagate(False)
         ttk.Label(panel,text='参数说明',font=('Microsoft YaHei UI',14,'bold')).pack(anchor='w',pady=(0,12))
         self.title=tk.StringVar();self.value=tk.StringVar();self.detail=tk.StringVar();self.destination=tk.StringVar()
         ttk.Label(panel,textvariable=self.title,font=('Microsoft YaHei UI',12,'bold'),wraplength=225).pack(anchor='w',pady=6)
@@ -51,7 +55,8 @@ class ParameterGuide(ttk.Frame):
         ttk.Label(panel,textvariable=self.destination,wraplength=225,foreground='#596b80').pack(anchor='w',pady=12)
         ttk.Button(panel,text='查看对应曲线 →',command=self.jump).pack(fill='x',pady=5)
         ttk.Button(panel,text='取消固定选择',command=self.unpin).pack(fill='x',pady=5)
-        ttk.Label(panel,text='悬停：预览参数\n单击：固定选择\n双击：跳到对应曲线\n\n引出线与虚线是参数标注。\n斜视图固定航向以便认清左右；\n航向箭头仅示意转向方向，\n实际角度请看当前值/三维页。',wraplength=225,foreground='#596b80').pack(anchor='w',pady=20)
+        ttk.Button(panel,text='看 pitch / yaw / 关节角度图 →',command=lambda:self.book.select(1)).pack(fill='x',pady=5)
+        ttk.Label(panel,text='悬停预览 · 单击固定 · 双击曲线\n\n本页数值来自四状态简化实验。\n斜视图固定航向，yaw 箭头为示意。\n\n“角度怎么看”：独立侧视/俯视图。\n“推导 → 控制输出”：六状态 LQR、\n腿长/转向环及最终电机力矩。',wraplength=225,foreground='#596b80').pack(anchor='w',pady=12)
         self.tooltip=tk.Label(self.canvas,bg='#16304c',fg='white',padx=9,pady=6,justify='left',font=('Microsoft YaHei UI',10))
         self.canvas.bind('<Configure>',lambda _:self.draw())
         self.canvas.bind('<Motion>',self.motion);self.canvas.bind('<Leave>',lambda _:self.leave())
@@ -63,8 +68,8 @@ class ParameterGuide(ttk.Frame):
         replacements={
             'left_height':('左串联腿有效长度','hL = h + 0.18*roll','腿长与电机',0,'左侧二连杆串联腿从髋关节到轮轴的有效长度，单位 m。'),
             'right_height':('右串联腿有效长度','hR = h - 0.18*roll','腿长与电机',1,'右侧二连杆串联腿从髋关节到轮轴的有效长度，单位 m。'),
-            'left_hip':('左腿髋/膝关节电机','tau_LH / tau_LK','腿长与电机',4,'左串联腿 H/K 为髋、膝主动关节。曲线显示接口输出的两个关节转矩，便于替换为自己的 PID。'),
-            'right_hip':('右腿髋/膝关节电机','tau_RH / tau_RK','腿长与电机',5,'右串联腿 H/K 为髋、膝主动关节；qHip/qKnee 使用串联腿控制器的角度约定。'),
+            'left_hip':('左腿髋/膝关节电机','tau_LH / tau_LK','腿长与电机',4,'H=主动髋，K=主动膝，W=轮轴。qHip 从机身向下线量起，qKnee 从大腿延长线量起。此页曲线仍为简化模型输出，不能当作 MuJoCo 串联腿实测力矩；实景映射见推导页。'),
+            'right_hip':('右腿髋/膝关节电机','tau_RH / tau_RK','腿长与电机',5,'右侧同样由髋、膝两个主动电机驱动。实景最终 tauH=J11·F+J21·T，tauK=J12·F+J22·T；T 是虚拟摆腿力矩。此页回放为简化实验记录。'),
         }
         return replacements.get(key,PARAMETERS[key])
 
@@ -74,7 +79,14 @@ class ParameterGuide(ttk.Frame):
         return five_bar_geometry(0,self.state[2],height)
 
     def set_robot_config(self,config):
+        old_serial=self.robot_config.get('leg_topology')=='serial'
         self.robot_config=config
+        if old_serial!=(config.get('leg_topology')=='serial'):
+            selected=self.book.index(self.book.select())
+            for tab in self.book.tabs()[1:]:
+                self.book.nametowidget(tab).destroy()
+            self.angle_explainer=add_control_explanation(self.book,config.get('leg_topology')=='serial')
+            self.book.select(selected)
         self.update_detail();self.draw()
 
     def set_sample(self,state,output=None,timestamp=None):
@@ -175,6 +187,7 @@ class ParameterGuide(ttk.Frame):
         line([center,center+[0,-scale*.12]],'pitch','#7d91a6',1,dash=(4,3))
         theta=s[2];axis=np.array([np.sin(theta),-np.cos(theta)])*scale*.12
         line([center,center+axis],'pitch','#b64074',2,arrow='last')
+        c.create_text(center[0]+30,center[1]-scale*.13,text='pitch\n竖直 ↔ 机身',fill='#b64074',font=('Microsoft YaHei UI',10,'bold'),tags=tags('pitch'))
         if abs(theta)>.005:
             arc=np.linspace(0,theta,25);points=center+scale*.08*np.column_stack([np.sin(arc),-np.cos(arc)])
             line(points,'pitch','#b64074',2,arrow='last')
@@ -184,6 +197,7 @@ class ParameterGuide(ttk.Frame):
         line([[cx+scale*.13,ground_y-15],[cx+scale*.26,ground_y-15]],'vel','#146c94',3,arrow='last')
         angles=np.linspace(-.3,.9,25);yawarc=np.column_stack([cx+scale*.12*np.cos(angles),ground_y+scale*.045*np.sin(angles)])
         line(yawarc,'yaw','#6c6eb2',2,arrow='last');anchors['yaw']=yawarc[-1]
+        c.create_text(cx+scale*.12,ground_y+scale*.065,text='yaw：俯视绕 Z 轴左转（示意）',fill='#6c6eb2',font=('Microsoft YaHei UI',9),tags=tags('yaw'))
         anchors['wheels']=project([[0,.06]],-.18)[0];anchors['support']=project([[0,.13]],.18)[0]
         title='串联腿参数导览' if self.robot_config.get('leg_topology')=='serial' else '五连杆参数导览'
         c.create_text(w/2,25,text=title+' · 固定斜视',font=('Microsoft YaHei UI',15,'bold'),fill='#233a51')

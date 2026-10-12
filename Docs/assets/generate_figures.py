@@ -20,26 +20,64 @@ def save(fig, name):
     plt.close(fig)
 
 
+def readable_symbols(serial=False):
+    """Keep every symbol off its rod, with leader lines and a separate key."""
+    fig,(ax,key)=plt.subplots(1,2,figsize=(13,8),gridspec_kw={'width_ratios':[1.25,1]})
+    ax.set_aspect('equal');ax.axis('off');key.axis('off')
+    ax.set_xlim(-1.6,2.8);ax.set_ylim(3.3,-1.0)
+    def call(text,point,label,color=NAVY):
+        ax.annotate(text,xy=point,xytext=label,fontsize=14,color=color,ha='center',va='center',
+                    bbox=dict(boxstyle='round,pad=.22',fc='white',ec='none',alpha=1),
+                    arrowprops=dict(arrowstyle='-',color=GREY,lw=1.2),zorder=10)
+    def arc(center,r,start,end,color):
+        t=np.linspace(start,end,60);points=center+r*np.column_stack([np.cos(t),np.sin(t)])
+        ax.plot(*points.T,color=color,lw=2,zorder=5)
+        ax.annotate('',xy=points[-1],xytext=points[-5],arrowprops=dict(arrowstyle='->',color=color,lw=2))
+        return points[len(points)//2]
+    if serial:
+        H=np.array([.5,0]);q1,q2=np.radians([-30,65]);a,b=1.,1.35
+        K=H+a*np.array([np.sin(q1),np.cos(q1)]);W=K+b*np.array([np.sin(q1+q2),np.cos(q1+q2)])
+        ax.plot(*np.vstack([H,K,W]).T,'-o',lw=6,color=BLUE,zorder=2)
+        ax.plot(*np.vstack([H,W]).T,'--',color=RED,lw=2,zorder=1)
+        ax.plot([H[0],H[0]],[0,.72],':',color=GREY)
+        ext=K+.65*np.array([np.sin(q1),np.cos(q1)])
+        ax.plot(*np.vstack([K,ext]).T,':',color=GREY)
+        call('H：主动髋',H,(-.8,-.45));call('K：主动膝',K,(-1.0,1.05));call('W：轮轴',W,(1.65,2.5))
+        call('$l_1$ 大腿长',(H+K)/2,(-.85,.35));call('$l_2$ 小腿长',(K+W)/2,(-.75,2.05))
+        call('$L$ 虚拟腿长',(H+W)/2,(1.9,1.28),RED)
+        call('$q_1$ 髋角',arc(H,.33,np.pi/2,np.pi/2-q1,BLUE),(-.65,-.1),BLUE)
+        call('$q_2$ 相对膝角',arc(K,.34,np.pi/2-q1,np.pi/2-q1-q2,ORANGE),(1.8,.72),ORANGE)
+        phi=np.arctan2(*(W-H)[::-1]);call('$\phi_0$',arc(H,.55,0,phi,RED),(1.8,.17),RED)
+        origin=H;title='串联腿：髋—膝—轮轴'
+        notes=[('机构点','H、K：两个主动关节\nW：轮电机轴心'),('结构参数','l₁ = |HK|，l₂ = |KW|\n固定杆长，不是控制命令'),('关节角','q₁：机身向下参考线 → HK\nq₂：HK 延长线 → KW\n箭头给出图中有向转角'),('虚拟腿','L = |HW|\nφ₀：局部 +x → HW\n虚线不是实体杆'),('机身姿态','φ = pitch：机身前后倾\nψ = yaw：俯视航向\n见独立侧视 / 俯视图')]
+    else:
+        A=np.array([0.,0]);E=np.array([1.2,0]);O=(A+E)/2
+        a,b=1.1,1.5;q1,q4=np.radians([108,72]);B=A+a*np.array([np.cos(q1),np.sin(q1)]);D=E+a*np.array([np.cos(q4),np.sin(q4)])
+        C=(B+D)/2+np.array([0,np.sqrt(b*b-np.linalg.norm(D-B)**2/4)])
+        ax.plot(*np.vstack([A,B,C]).T,'-o',lw=6,color=BLUE);ax.plot(*np.vstack([E,D,C]).T,'-o',lw=6,color=ORANGE)
+        ax.plot(*np.vstack([A,E]).T,lw=5,color=NAVY);ax.plot(*np.vstack([O,C]).T,'--',lw=2,color=RED)
+        for pos,name,dest in [(A,'A 主动',(-.65,-.45)),(E,'E 主动',(1.85,-.45)),(O,'O 中点',(.6,-.78)),(B,'B 被动',(-1.,1.05)),(D,'D 被动',(2.2,1.05)),(C,'C 轮轴',(.6,2.72))]:call(name,pos,dest)
+        for pos,name,dest in [((A+B)/2,'$l_1$',(-1.1,.48)),((E+D)/2,'$l_1$',(2.3,.48)),((B+C)/2,'$l_2$',(-.9,1.85)),((D+C)/2,'$l_2$',(2.1,1.85))]:call(name,pos,dest)
+        ax.annotate('',xy=(1.2,-.24),xytext=(0,-.24),arrowprops=dict(arrowstyle='<->',color=GREY));call('$d$',(.85,-.24),(1.05,-.68))
+        for pos,q,color,lab,dest in [(A,q1,BLUE,'$\phi_1$',(-.8,.02)),(E,q4,ORANGE,'$\phi_4$',(2.1,.02))]:
+            ax.plot([pos[0],pos[0]+.5],[0,0],':',color=GREY);call(lab,arc(pos,.28,0,q,color),dest,color)
+        call('$\phi_0$',arc(O,.43,0,np.pi/2,RED),(1.02,.65),RED)
+        call('$L$',(O+C)/2,(.12,1.35),RED)
+        origin=O;title='并联五连杆：闭链 A—B—C—D—E—A'
+        notes=[('机构点','A、E：两个主动髋\nB、D：被动膝，无驱动电机\nO：两髋中点；C：轮轴'),('结构参数','l₁ = |AB| = |ED|\nl₂ = |BC| = |DC|；d = |AE|'),('主动杆角','φ₁：局部 +x → AB\nφ₄：局部 +x → ED\n两个角都不从竖直量起'),('虚拟腿','L = |OC|\nφ₀：局部 +x → OC\n虚线不是实体杆'),('机身姿态','φ = pitch：机身前后倾\nψ = yaw：俯视航向\n见独立侧视 / 俯视图')]
+    # Detached axes avoid hiding O, d or the physical hip beam.
+    ax.annotate('',xy=(2.4,2.95),xytext=(1.65,2.95),arrowprops=dict(arrowstyle='->',color=NAVY))
+    ax.annotate('',xy=(1.65,3.28),xytext=(1.65,2.95),arrowprops=dict(arrowstyle='->',color=NAVY))
+    ax.text(2.4,2.86,'+x 前',ha='center',fontsize=11);ax.text(1.48,3.2,'+y 下',ha='right',fontsize=11)
+    for i,(heading,body) in enumerate(notes):
+        y=.96-i*.195;key.text(.03,y,heading,fontsize=15,color=NAVY,weight='bold',va='top')
+        key.text(.03,y-.05,body,fontsize=12,color='#263442',va='top',linespacing=1.55)
+    fig.suptitle(title,fontsize=19,color=NAVY)
+    save(fig,'07_serial_symbols.png' if serial else '01_five_bar_symbols.png')
+
+
 def mechanism():
-    A=np.array([0.,0.]);E=np.array([1.2,0.]);B=np.array([-.28,1.28]);D=np.array([1.58,1.18]);C=np.array([.62,2.34]);O=(A+E)/2
-    fig,ax=plt.subplots(figsize=(9,6))
-    ax.plot(*np.vstack([A,B,C]).T,'-o',lw=5,color=BLUE)
-    ax.plot(*np.vstack([E,D,C]).T,'-o',lw=5,color=ORANGE)
-    ax.plot(*np.vstack([A,E]).T,lw=5,color=NAVY)
-    ax.plot(*np.vstack([O,C]).T,'--',lw=2.5,color=RED)
-    for p,n,off in [(A,'A',(0,-.18)),(B,'B',(-.18,.03)),(C,'C',(0,.14)),(D,'D',(.14,.03)),(E,'E',(0,-.18)),(O,'O',(.02,-.2))]:
-        ax.text(*(p+off),n,fontsize=15,weight='bold',ha='center')
-    ax.annotate('',xy=(1.1,-.35),xytext=(.6,-.35),arrowprops=dict(arrowstyle='->',lw=2,color=NAVY));ax.text(1.13,-.35,'$x$',va='center',fontsize=14)
-    ax.annotate('',xy=(.6,.2),xytext=(.6,-.35),arrowprops=dict(arrowstyle='->',lw=2,color=NAVY));ax.text(.68,.28,'$y$ (down)',ha='left',fontsize=13)
-    ax.annotate('$d$',xy=(.6,.03),ha='center',va='bottom',fontsize=14)
-    ax.text(-.24,.65,'$l_1$',fontsize=15,color=BLUE);ax.text(.08,1.82,'$l_2$',fontsize=15,color=BLUE)
-    ax.text(1.32,.58,'$l_1$',fontsize=15,color=ORANGE);ax.text(1.12,1.78,'$l_2$',fontsize=15,color=ORANGE)
-    ax.text(.49,1.25,'$L$',fontsize=15,color=RED)
-    for center,start,end,label,pos,color in [(A,0,103,'$\phi_1$',(-.14,.34),BLUE),(E,77,180,'$\phi_4$',(.98,.34),ORANGE),(O,0,75,'$\phi_0$',(.83,.45),RED)]:
-        ax.add_patch(Arc(center,.48,.48,theta1=start,theta2=end,color=color,lw=2));ax.text(*pos,label,fontsize=14,color=color)
-    ax.text(.02,2.72,'Code coordinate system: origin A, +x forward, +y downward',fontsize=11,color=GREY)
-    ax.set_aspect('equal');ax.set_xlim(-.75,2.0);ax.set_ylim(2.9,-.65);ax.axis('off')
-    save(fig,'01_five_bar_symbols.png')
+    readable_symbols()
 
 
 def closure():
@@ -117,20 +155,7 @@ def singularity():
 
 
 def serial_symbols():
-    H=np.array([0.,0.]);K=np.array([.72,1.05]);W=np.array([.28,2.05])
-    fig,ax=plt.subplots(figsize=(7.5,6))
-    ax.plot(*np.vstack([H,K]).T,'-o',lw=7,color=BLUE);ax.plot(*np.vstack([K,W]).T,'-o',lw=7,color=ORANGE)
-    ax.plot(*np.vstack([H,W]).T,'--',lw=2.5,color=RED)
-    for p,n,off in [(H,'H / hip',(-.15,-.14)),(K,'K / knee',(.14,0)),(W,'W / wheel',(.05,.16))]:ax.text(*(p+off),n,fontsize=13,weight='bold')
-    ax.annotate('',xy=(1.05,-.28),xytext=(0,-.28),arrowprops=dict(arrowstyle='->',lw=2,color=NAVY));ax.text(1.08,-.28,'$x$ forward',va='center',fontsize=12)
-    ax.annotate('',xy=(0,.45),xytext=(0,-.28),arrowprops=dict(arrowstyle='->',lw=2,color=NAVY));ax.text(-.08,.46,'$y$ down',ha='right',fontsize=12)
-    ax.text(.42,.56,'$l_1$',fontsize=16,color=BLUE);ax.text(.58,1.58,'$l_2$',fontsize=16,color=ORANGE);ax.text(-.02,1.04,'$L$',fontsize=16,color=RED)
-    ax.add_patch(Arc(H,.52,.52,theta1=52,theta2=90,color=BLUE,lw=2));ax.text(.48,.42,'$q_1$',fontsize=15,color=BLUE)
-    ax.add_patch(Arc(K,.48,.48,theta1=95,theta2=155,color=ORANGE,lw=2));ax.text(.78,1.32,'$q_2$ relative',fontsize=14,color=ORANGE)
-    ax.add_patch(Arc(H,.8,.8,theta1=0,theta2=74,color=RED,lw=2));ax.text(.44,.14,'$\phi_0$',fontsize=15,color=RED)
-    ax.text(.05,2.48,'Convention: $q_1=0$ points down; $q_2$ is relative to the upper link',fontsize=12,color=GREY)
-    ax.set_aspect('equal');ax.set_xlim(-.65,1.65);ax.set_ylim(2.65,-.55);ax.axis('off')
-    save(fig,'07_serial_symbols.png')
+    readable_symbols(True)
 
 
 def serial_inverse():
@@ -260,9 +285,39 @@ def theory_engineering_comparison():
     save(fig, '12_theory_vs_engineering.png')
 
 
+def attitude_axes():
+    fig,axes=plt.subplots(1,2,figsize=(12,5.5))
+    for ax in axes:
+        ax.set_aspect('equal');ax.set_xlim(-1.6,1.9);ax.set_ylim(-1.3,1.8);ax.axis('off')
+    ax=axes[0];p=np.radians(22)
+    ax.set_title('侧视：pitch = 机身前后倾角',fontsize=15,color=NAVY)
+    ax.plot([0,0],[0,1.3],'--',color=GREY);ax.text(-.15,1.43,'世界竖直参考',ha='center',fontsize=11)
+    up=np.array([np.sin(p),np.cos(p)]);front=np.array([np.cos(p),-np.sin(p)])
+    ax.annotate('',xy=up*1.2,xytext=(0,0),arrowprops=dict(arrowstyle='->',lw=3,color=RED))
+    ax.plot(*np.vstack([-front,front]).T,color=BLUE,lw=7)
+    ax.text(1.1,-.4,'车头 →',color=BLUE,fontsize=12)
+    ax.add_patch(Arc((0,0),1.3,1.3,theta1=68,theta2=90,color=RED,lw=2))
+    ax.text(.6,.9,'pitch\n图示前倾',color=RED,fontsize=13)
+    ax.text(.1,-.9,'绕左右轴 Y 旋转；不是髋角或腿摆角\n机身直立为零，代码输入符号经适配器转换',ha='center',fontsize=11)
+    ax=axes[1];a=np.radians(35)
+    ax.set_title('俯视：yaw = 车头航向角',fontsize=15,color=NAVY)
+    for dest,label in [((1.5,0),'世界 +X / yaw=0'),((0,1.4),'世界 +Y（左）')]:
+        ax.annotate('',xy=dest,xytext=(0,0),arrowprops=dict(arrowstyle='->',color=GREY,lw=2))
+        ax.text(dest[0],dest[1]+.15,label,ha='center',fontsize=10)
+    front=np.array([np.cos(a),np.sin(a)])
+    ax.annotate('',xy=1.3*front,xytext=(0,0),arrowprops=dict(arrowstyle='->',lw=3,color=BLUE))
+    ax.text(1.2,.85,'车头',color=BLUE,fontsize=12)
+    ax.add_patch(Arc((0,0),1.5,1.5,theta1=0,theta2=35,color=RED,lw=2));ax.text(.87,.22,'yaw',color=RED,fontsize=13)
+    ax.text(-.5,-.3,'⊙ +Z 向上\n朝观察者',fontsize=11,color=NAVY)
+    ax.text(.1,-.9,'绕竖直 Z 轴旋转，俯视左转为正\nyaw 走独立转向环，不属于六状态 LQR',ha='center',fontsize=11)
+    fig.suptitle('并联 / 串联共用机身姿态定义；关节角按各自机构图解释',fontsize=15,y=1.02)
+    save(fig,'13_pitch_yaw_axes.png')
+
+
 if __name__ == '__main__':
-    mechanism();closure();jacobian();vmc();pipeline();singularity()
-    serial_symbols();serial_inverse();serial_jacobian();serial_singularity()
+    attitude_axes()
+    readable_symbols();closure();jacobian();vmc();pipeline();singularity()
+    readable_symbols(True);serial_inverse();serial_jacobian();serial_singularity()
     embedded_data_pipeline()
     theory_engineering_comparison()
-    print('generated 12 tutorial figures in', OUT)
+    print('generated 13 tutorial figures in', OUT)

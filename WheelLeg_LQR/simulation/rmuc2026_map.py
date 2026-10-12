@@ -55,17 +55,19 @@ def _ramp(name, center_xy, length, width, low, high, rgba, rising_positive_x=Tru
     # Rotation about +y makes the +x end lower, hence the sign inversion.
     quat = _quat_y(-angle)
     thickness = .055
-    z = (low+high)/2-thickness/2
-    return _box(name, (center_xy[0], center_xy[1], z), (length/2, width/2, thickness/2),
+    # Align the top endpoints, including the rotated thickness offset.
+    z = (low+high)/2-thickness/2*math.cos(angle)
+    x = center_xy[0]+thickness/2*math.sin(angle)
+    return _box(name, (x, center_xy[1], z), (length/(2*math.cos(angle)), width/2, thickness/2),
                 rgba, quat=quat)
 
 
 def arena_xml():
     """Return worldbody geoms for a symmetric, driveable RMUC 2026 arena."""
-    dark = '.105 .125 .145 1'
-    road = '.22 .245 .255 1'
-    highland = '.255 .285 .295 1'
-    edge = '.38 .41 .42 1'
+    dark = '.28 .31 .34 1'
+    road = '.48 .51 .53 1'
+    highland = '.57 .60 .61 1'
+    edge = '.72 .75 .76 1'
     red = '.82 .08 .11 1'
     blue = '.08 .22 .78 1'
     geoms = [
@@ -80,25 +82,32 @@ def arena_xml():
     # Central highland: 0.40 m deck with the rulebook's 10.5 degree approaches.
     center_height = .40
     center_half_length = 3.0
-    center_half_width = 4.15
+    # Keep the launch/landing lanes at y=+/-3.8 clear of this training deck.
+    center_half_width = 2.65
     center_run = center_height/math.tan(math.radians(10.5))
     geoms += [
         _box('central_highland', (0, 0, center_height/2),
              (center_half_length, center_half_width, center_height/2), highland),
         _ramp('central_ramp_red', (-center_half_length-center_run/2, 0), center_run,
-              2*center_half_width, 0, center_height, highland, True),
+              2*center_half_width, 0, center_height, road, True),
         _ramp('central_ramp_blue', (center_half_length+center_run/2, 0), center_run,
-              2*center_half_width, center_height, 0, highland, True),
+              2*center_half_width, center_height, 0, road, True),
     ]
 
     # Road decks and fly ramps.  The launch face follows the documented 17 degrees,
     # with a 0.20 -> 0.553 m rise and an approximately 0.65 m gap.
-    geoms += [
-        _box('road_red', (-9.0, 3.8, .10), (3.0, .60, .10), road),
-        _box('road_blue', (9.0, -3.8, .10), (3.0, .60, .10), road),
-    ]
-    fly_low, fly_high = .203, .553
+    fly_low, fly_high = .20, .553
     fly_run = (fly_high-fly_low)/math.tan(math.radians(17))
+    road_end=-5.45-fly_run
+    for side,sign,color in (('red',1,red),('blue',-1,blue)):
+        geoms.append(_box(f'road_{side}', (sign*(-12+road_end)/2,sign*3.8,.10),
+                          ((road_end+12)/2,.60,.10),road))
+        geoms.append(_ramp(f'road_entry_{side}',(sign*-12.6,sign*3.8),1.2,1.2,
+                           0 if sign==1 else .20,.20 if sign==1 else 0,road))
+        for i,offset in enumerate((-.55,.55)):
+            geoms.append(_box(f'road_line_{side}_{i}',
+                              (sign*(-12+road_end)/2,sign*3.8+offset,.204),
+                              ((road_end+12)/2,.018,.002),color,collide=False))
     geoms += [
         _ramp('launch_ramp', (-5.45-fly_run/2, 3.8), fly_run, 1.145,
               fly_low, fly_high, road, True),
@@ -132,7 +141,7 @@ def arena_xml():
             _cylinder(f'base_pad_{side}', (sign*10.8, 0, .06), 1.18, .06, edge),
             _cylinder(f'base_{side}', (sign*10.8, 0, .48), .46, .42, color),
             _cylinder(f'outpost_{side}', (sign*5.25, -sign*1.75, .43), .38, .43, color),
-            _box(f'fortress_{side}', (sign*8.1, -sign*4.8, .12), (1.0, .75, .12), highland),
+            _box(f'fortress_{side}', (sign*6.5, -sign*5.8, .12), (.8, .65, .12), highland),
             _box(f'spawn_mark_{side}', (sign*10.8, 0, .123), (1.45, .025, .003), color, collide=False),
         ]
 
@@ -142,6 +151,15 @@ def arena_xml():
         _box('blue_half_marker', (7.0, -7.38, .006), (6.8, .035, .006), blue, collide=False),
         _box('centre_line', (0, 0, .006), (.025, 7.3, .006), '.75 .75 .70 1', collide=False),
     ]
+    # Raised-deck markings sit above the actual deck, not inside it.
+    geoms.append(_box('centre_deck_line',(0,0,.404),(.025,center_half_width,.002),edge,collide=False))
+    for side,sign,color in (('red',-1,red),('blue',1,blue)):
+        for i,y in enumerate((-7.35,7.35)):
+            geoms.append(_box(f'boundary_{side}_{i}',(sign*7,y,.008),
+                              (6.9,.045,.003),color,collide=False))
+        for i,y in enumerate((-2.8,2.8)):
+            geoms.append(_box(f'base_zone_{side}_{i}',(sign*11.2,y,.008),
+                              (2.3,.025,.003),color,collide=False))
     return '\n        '.join(geoms)
 
 

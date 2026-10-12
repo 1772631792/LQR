@@ -15,7 +15,7 @@
         6.45000307229866,
         0.2619882685196664
       ],
-      "physics_rtf": 13.637807997997259,
+      "physics_rtf": 12.69270163646708,
       "contacts": [
         "Ltire",
         "Rtire",
@@ -24,21 +24,19 @@
     },
     {
       "name": "ramp",
-      "peak_pitch_deg": 54.713919870856294,
-      "airborne_ticks": 1881,
-      "max_closure_error_m": 0.00042826405079827,
+      "peak_pitch_deg": 28.78300340505996,
+      "airborne_ticks": 444,
+      "max_closure_error_m": 0.0004039179869486137,
       "final_position": [
-        -4.554457062093189,
-        3.732085494892367,
-        0.3582212643613829
+        -4.6336396048946975,
+        3.800558166229856,
+        0.32119801086194016
       ],
-      "physics_rtf": 13.177246217366186,
+      "physics_rtf": 12.396321822300205,
       "contacts": [
         "Ltire",
         "Rtire",
         "arena_floor",
-        "central_ramp_red",
-        "fortress_red",
         "launch_ramp",
         "ramp_platform",
         "road_red",
@@ -55,7 +53,7 @@
         -5.197299990387347,
         0.35407366872127377
       ],
-      "physics_rtf": 12.37934778329821,
+      "physics_rtf": 11.890816156073672,
       "contacts": [
         "Ltire",
         "Rtire",
@@ -67,8 +65,8 @@
   ],
   "render": {
     "sim_seconds": 3.959999999999675,
-    "wall_seconds": 2.0358382999984315,
-    "rendered_rtf": 1.9451446610483387,
-    "fps": 58.94377760753025
+    "wall_seconds": 1.4954017999989446,
+    "rendered_rtf": 2.6481177165912664,
+    "fps": 80.24599141186314
   }
 }
